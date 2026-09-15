@@ -26,7 +26,7 @@ function NavigationBar({ session, setSession }) {
     }}>
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
         <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: '18px' }}>
-          🏛️ Museum
+          Pokémon Museum
         </Link>
         <Link to="/submit" style={{ color: '#ddd', textDecoration: 'none', fontSize: '15px' }}>
           Submit Art
