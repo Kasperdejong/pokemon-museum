@@ -9,12 +9,14 @@ body,
 #root {
   width: 100%;
   min-height: 100vh;
+  background-color: #0d0d0d;
+  /* 👈 Deep black fallback instead of bright white */
+  color: #eee;
 }
 
 body {
   margin: 0;
   padding: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #fcfcfc;
-  color: #222;
+  background-color: #0d0d0d;
 }

@@ -76,7 +76,6 @@ export default function Submit() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    // Regular users are blocked during cooldown; Admins bypass it
     if (!isAdmin && cooldownRemaining > 0) {
       alert(`Please wait ${cooldownRemaining} more minutes before submitting another drawing.`);
       return;
@@ -111,17 +110,14 @@ export default function Submit() {
 
       const { width, height } = await getImageDimensions(file);
 
-      // Allows pixel art, but rejects empty/broken files
       if (width < 16 || height < 16) {
         throw new Error('Image is too small or invalid.');
       }
 
-      // Max size limit to prevent canvas memory crashes
       if (width > 8000 || height > 8000) {
         throw new Error('Image dimensions are too huge (max 8000px per side).');
       }
 
-      // Aspect ratio guard: allows up to 8:1 vertical comic strips or 8:1 panoramas
       const aspectRatio = width / height;
       if (aspectRatio < 0.12 || aspectRatio > 8.0) {
         throw new Error('Image aspect ratio is too extreme (max 8:1 ratio).');
@@ -129,7 +125,7 @@ export default function Submit() {
 
       setStatusMsg('Optimizing & compressing image...');
       const options = {
-        maxSizeMB: 0.2, // ~200 KB max
+        maxSizeMB: 0.2,
         maxWidthOrHeight: 1200,
         useWebWorker: true,
         fileType: 'image/webp'
@@ -157,17 +153,13 @@ export default function Submit() {
 
       setStatusMsg('Registering submission...');
 
-    // 1. Generate IDs directly on the client
       const submissionId = crypto.randomUUID();
       const deleteToken = crypto.randomUUID();
 
-      setStatusMsg('Registering submission...');
-
-      // 2. Insert WITHOUT .select() so Postgres doesn't trigger the read RLS check
       const { error: dbErr } = await supabase
         .from('submissions')
         .insert([{
-          id: submissionId, // Pass the generated UUID
+          id: submissionId,
           artist_name: artistName.trim(),
           pokemon_name: matched.name.english,
           image_url: publicUrl,
@@ -177,7 +169,6 @@ export default function Submit() {
 
       if (dbErr) throw dbErr;
 
-      // 3. Save to this device's keychain using the submissionId we just created
       const stored = JSON.parse(localStorage.getItem('poke_my_submissions') || '[]');
       stored.unshift({
         id: submissionId,
@@ -189,7 +180,6 @@ export default function Submit() {
       });
       localStorage.setItem('poke_my_submissions', JSON.stringify(stored));
 
-      // Set cooldown only for regular viewers
       if (!isAdmin) {
         localStorage.setItem(COOLDOWN_KEY, Date.now().toString());
       }
@@ -206,114 +196,169 @@ export default function Submit() {
   }
 
   return (
-    <div style={{ maxWidth: '500px', margin: '30px auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <h2>Submit Your Pokémon Drawing</h2>
+    <div style={{
+      position: 'relative',
+      flex: 1, 
+      minHeight: 'calc(100dvh - 54px)', 
+      width: '100%',
+      backgroundImage: 'url(/submit_bg.webp)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+      padding: '40px 20px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: 'sans-serif',
+      boxSizing: 'border-box'
+    }}>
+      {/* Semi-transparent Frosted Card */}
+      <div style={{
+        width: '100%',
+        maxWidth: '520px',
+        backgroundColor: 'rgba(255, 255, 255, 0.94)',
+        backdropFilter: 'blur(8px)',
+        borderRadius: '12px',
+        padding: '30px',
+        boxShadow: '0 12px 35px rgba(0,0,0,0.18)'
+      }}>
+        <h2 style={{ marginTop: 0, color: '#222' }}>Submit Your Pokémon Drawing</h2>
 
-      {/* Admin Mode indicator */}
-      {isAdmin && (
-        <div style={{ padding: '8px 12px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '4px', marginBottom: '16px', fontSize: '14px', fontWeight: 'bold' }}>
-          👑 Admin Mode: Cooldown bypassed. Submit as much as you like!
-        </div>
-      )}
-
-      {/* Cooldown notice for viewers */}
-      {!isAdmin && cooldownRemaining > 0 ? (
-        <div style={{ padding: '15px', background: '#ffebee', color: '#c62828', borderRadius: '6px' }}>
-          ⏳ Cooldown active: You can submit another drawing in <strong>{cooldownRemaining} minutes</strong>.
-          <br /><br />
-          <small>Did you upload the wrong file? Go to <strong>My Submissions</strong> to retract it and reset your timer immediately.</small>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>Artist Name / Handle:</label>
-            <input
-              type="text"
-              maxLength={30}
-              value={artistName}
-              onChange={(e) => setArtistName(e.target.value)}
-              placeholder="e.g. AshKetchum"
-              required
-              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-            />
+        {isAdmin && (
+          <div style={{ padding: '8px 12px', background: '#e8f5e9', color: '#2e7d32', borderRadius: '4px', marginBottom: '16px', fontSize: '14px', fontWeight: 'bold' }}>
+            👑 Admin Mode: Cooldown bypassed. Submit as much as you like!
           </div>
+        )}
 
-          <div style={{ position: 'relative' }}>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>Pokémon Drawn:</label>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setSelectedPokemon(null);
+        {!isAdmin && cooldownRemaining > 0 ? (
+          <div style={{ padding: '15px', background: '#ffebee', color: '#c62828', borderRadius: '6px' }}>
+            ⏳ Cooldown active: You can submit another drawing in <strong>{cooldownRemaining} minutes</strong>.
+            <br /><br />
+            <small>Did you upload the wrong file? Go to <strong>My Submissions</strong> to retract it and reset your timer immediately.</small>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#333' }}>
+                Artist Name / Handle:
+              </label>
+              <input
+                type="text"
+                maxLength={30}
+                value={artistName}
+                onChange={(e) => setArtistName(e.target.value)}
+                placeholder="e.g. AshKetchum"
+                required
+                style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '6px', border: '1px solid #ccc' }}
+              />
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#333' }}>
+                Pokémon Drawn:
+              </label>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setSelectedPokemon(null);
+                }}
+                placeholder="Search Pokémon name..."
+                required
+                style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '6px', border: '1px solid #ccc' }}
+              />
+
+              {filteredSuggestions.length > 0 && (
+                <ul style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: '#fff',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px',
+                  listStyle: 'none',
+                  margin: '4px 0 0 0',
+                  padding: 0,
+                  zIndex: 10,
+                  boxShadow: '0 6px 12px rgba(0,0,0,0.1)'
+                }}>
+                  {filteredSuggestions.map((p) => (
+                    <li
+                      key={p.id}
+                      onClick={() => {
+                        setSelectedPokemon(p);
+                        setQuery(`${p.name.english} (#${p.id})`);
+                      }}
+                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                      onMouseEnter={(e) => (e.target.style.background = '#f2f2f2')}
+                      onMouseLeave={(e) => (e.target.style.background = '#fff')}
+                    >
+                      #{p.id} <strong>{p.name.english}</strong> {p.name.japanese ? `(${p.name.japanese})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#333' }}>
+                Drawing (PNG, JPG, WebP — Max 8:1 comic ratio):
+              </label>
+              <input
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                onChange={(e) => setFile(e.target.files[0])}
+                required
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={uploading}
+              style={{
+                padding: '12px',
+                backgroundColor: uploading ? '#888' : '#0070f3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: uploading ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                fontSize: '15px'
               }}
-              placeholder="Search Pokémon name..."
-              required
-              style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
-            />
+            >
+              {uploading ? statusMsg || 'Processing...' : 'Submit to Museum'}
+            </button>
+          </form>
+        )}
+      </div>
 
-            {filteredSuggestions.length > 0 && (
-              <ul style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                background: '#fff',
-                border: '1px solid #ccc',
-                listStyle: 'none',
-                margin: 0,
-                padding: 0,
-                zIndex: 10,
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-              }}>
-                {filteredSuggestions.map((p) => (
-                  <li
-                    key={p.id}
-                    onClick={() => {
-                      setSelectedPokemon(p);
-                      setQuery(`${p.name.english} (#${p.id})`);
-                    }}
-                    style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                    onMouseEnter={(e) => (e.target.style.background = '#f0f0f0')}
-                    onMouseLeave={(e) => (e.target.style.background = '#fff')}
-                  >
-                    #{p.id} <strong>{p.name.english}</strong> {p.name.japanese ? `(${p.name.japanese})` : ''}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold' }}>
-              Drawing (PNG, JPG, WebP):
-            </label>
-            <input
-              type="file"
-              accept="image/png, image/jpeg, image/webp"
-              onChange={(e) => setFile(e.target.files[0])}
-              required
-              style={{ width: '100%' }}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={uploading}
-            style={{
-              padding: '12px',
-              backgroundColor: uploading ? '#999' : '#0070f3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: uploading ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            {uploading ? statusMsg || 'Processing...' : 'Submit to Museum'}
-          </button>
-        </form>
-      )}
+      {/* 🔍 Subtle, Non-Intrusive Background Credit in the Bottom Corner */}
+      <div style={{
+        position: 'absolute',
+        bottom: '8px',
+        right: '12px',
+        fontSize: '11px',
+        color: '#ffffff',
+        opacity: 0.45,
+        transition: 'opacity 0.2s ease',
+        textShadow: '0 1px 2px rgba(0,0,0,0.75)'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+      onMouseLeave={(e) => e.currentTarget.style.opacity = '0.45'}
+      >
+        credit for the background goes to{' '}
+        <a 
+          href="https://www.reddit.com/r/wallpapers/comments/12xf50o/i_made_a_pokemon_koi_pond_wallpaper_3840_x_2160/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{ color: '#fff', textDecoration: 'underline' }}
+        >
+          CarolynDesign
+        </a>
+      </div>
     </div>
   );
 }

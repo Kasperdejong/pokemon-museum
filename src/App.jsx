@@ -6,21 +6,8 @@ import Admin from './pages/Admin';
 import MySubmissions from './pages/MySubmissions';
 import { supabase } from './supabaseClient';
 
-// Inner component so we can use hooks like useNavigate
 function NavigationBar({ session, setSession }) {
   const navigate = useNavigate();
-
-  // ⌨️ Secret shortcut: Ctrl+Shift+A (or Cmd+Shift+A on Mac) jumps to Admin
-  useEffect(() => {
-    function handleKeyDown(e) {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
-        e.preventDefault();
-        navigate('/admin');
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -39,7 +26,7 @@ function NavigationBar({ session, setSession }) {
     }}>
       <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
         <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: '18px' }}>
-          Pokémon Museum
+          🏛️ Museum
         </Link>
         <Link to="/submit" style={{ color: '#ddd', textDecoration: 'none', fontSize: '15px' }}>
           Submit Art
@@ -50,8 +37,7 @@ function NavigationBar({ session, setSession }) {
       </div>
 
       <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-        {/* 👑 Show Admin badge in the navbar ONLY when you are logged in */}
-        {session ? (
+        {session && (
           <>
             <Link 
               to="/admin" 
@@ -62,10 +48,7 @@ function NavigationBar({ session, setSession }) {
                 padding: '6px 12px',
                 borderRadius: '6px',
                 fontSize: '13px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px'
+                fontWeight: 'bold'
               }}
             >
               👑 Admin Dashboard
@@ -85,7 +68,7 @@ function NavigationBar({ session, setSession }) {
               Log Out
             </button>
           </>
-        ) : null}
+        )}
       </div>
     </nav>
   );
@@ -94,7 +77,6 @@ function NavigationBar({ session, setSession }) {
 export default function App() {
   const [session, setSession] = useState(null);
 
-  // Listen to Supabase auth changes across the entire app
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -109,11 +91,9 @@ export default function App() {
 
   return (
     <Router>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fcfcfc' }}>
-        {/* Top Navbar */}
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         <NavigationBar session={session} setSession={setSession} />
 
-        {/* Page Content */}
         <main style={{ flex: 1 }}>
           <Routes>
             <Route path="/" element={<Gallery />} />
@@ -123,33 +103,21 @@ export default function App() {
           </Routes>
         </main>
 
-        {/* Subtle Footer with Discreet Admin Access */}
-        <footer style={{
-          padding: '24px 20px',
-          background: '#f4f4f4',
-          borderTop: '1px solid #e0e0e0',
-          textAlign: 'center',
-          fontSize: '13px',
+        {/* 📍 Floating Global Copyright: Sticks to bottom-left on ALL pages without any footer block */}
+        <div style={{
+          position: 'fixed',
+          bottom: '8px',
+          left: '12px',
+          fontSize: '11px',
           color: '#888',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '10px'
+          opacity: 0.6,
+          zIndex: 90,
+          pointerEvents: 'none', // Lets viewers click things behind it
+          userSelect: 'none',
+          textShadow: '0 0 3px rgba(255,255,255,0.8), 0 1px 2px rgba(0,0,0,0.3)' // Legible on both light and dark backgrounds
         }}>
-          <div>Pokémon Community Museum &copy; {new Date().getFullYear()}</div>
-
-          <div>
-            {session ? (
-              <span style={{ color: '#2e7d32', fontWeight: 'bold' }}>Logged in as Admin</span>
-            ) : (
-              /* Discreet link so you don't have to type the URL */
-              <Link to="/admin" style={{ color: '#aaa', textDecoration: 'none', fontSize: '12px' }}>
-                Admin Access 🔒
-              </Link>
-            )}
-          </div>
-        </footer>
+          Pokémon Community Museum &copy; {new Date().getFullYear()}
+        </div>
       </div>
     </Router>
   );
