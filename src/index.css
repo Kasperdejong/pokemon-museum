@@ -10,8 +10,6 @@ body,
   width: 100%;
   min-height: 100vh;
   background-color: #0d0d0d;
-  /* 👈 Deep black fallback instead of bright white */
-  color: #eee;
 }
 
 body {
@@ -19,4 +17,18 @@ body {
   padding: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #0d0d0d;
+  color: #111;
+  /* Default to dark text */
+}
+
+/* Force dark text and white backgrounds on all form inputs and dropdowns */
+input,
+select,
+textarea {
+  color: #111 !important;
+  background-color: #ffffff !important;
+}
+
+input::placeholder {
+  color: #666 !important;
 }

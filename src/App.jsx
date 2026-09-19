@@ -28,6 +28,9 @@ function NavigationBar({ session, setSession }) {
         <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: '18px' }}>
           Pokémon Museum
         </Link>
+        <Link to="/kavhan" style={{ color: '#ff9800', textDecoration: 'none', fontWeight: 'bold', fontSize: '15px' }}>
+        Kavhan's Drawings
+      </Link>
         <Link to="/submit" style={{ color: '#ddd', textDecoration: 'none', fontSize: '15px' }}>
           Submit Art
         </Link>
@@ -95,8 +98,11 @@ export default function App() {
         <NavigationBar session={session} setSession={setSession} />
 
         <main style={{ flex: 1 }}>
-          <Routes>
-            <Route path="/" element={<Gallery />} />
+         <Routes>
+            {/* 🔑 Adding unique keys forces React to cleanly re-fetch every time */}
+            <Route path="/" element={<Gallery key="museum" />} />
+            <Route path="/kavhan" element={<Gallery key="kavhan" instructorMode={true} />} />
+            <Route path="/artist/:artistParam" element={<Gallery key="artist" />} />
             <Route path="/submit" element={<Submit />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/my-submissions" element={<MySubmissions />} />
