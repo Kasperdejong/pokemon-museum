@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
 export default function Admin() {
@@ -7,7 +7,8 @@ export default function Admin() {
   const [password, setPassword] = useState('');
   const [pendingList, setPendingList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [inspectArtwork, setInspectArtwork] = useState(null); // Click to zoom full-size
+  const [inspectArtwork, setInspectArtwork] = useState(null);
+  const [streamerMode, setStreamerMode] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,11 +43,11 @@ export default function Admin() {
     setLoading(false);
   }
 
-  async function approve(item) {
+  async function approve(item, isFeatured = false) {
     try {
       const { error } = await supabase
         .from('submissions')
-        .update({ is_approved: true })
+        .update({ is_approved: true, is_featured: isFeatured })
         .eq('id', item.id);
 
       if (error) throw error;
@@ -57,11 +58,14 @@ export default function Admin() {
     }
   }
 
-  async function reject(item) {
-    const confirmed = window.confirm(
-      `Reject and permanently delete "${item.pokemon_name}" by "${item.artist_name}"?`
-    );
-    if (!confirmed) return;
+  // bypassConfirm = true when using keyboard shortcut 'X' in viewer for speed!
+  async function reject(item, bypassConfirm = false) {
+    if (!bypassConfirm) {
+      const confirmed = window.confirm(
+        `Reject and delete "${item.pokemon_name}" by "${item.artist_name}"?`
+      );
+      if (!confirmed) return;
+    }
 
     try {
       const urlParts = item.image_url.split('/');
@@ -81,6 +85,38 @@ export default function Admin() {
     }
   }
 
+  async function approveAllVisible() {
+    if (!window.confirm(`Approve all ${pendingList.length} visible drawings?`)) return;
+    try {
+      const ids = pendingList.map((i) => i.id);
+      const { error } = await supabase.from('submissions').update({ is_approved: true }).in('id', ids);
+      if (error) throw error;
+      setPendingList([]);
+      setInspectArtwork(null);
+    } catch (err) {
+      alert('Batch approve failed: ' + err.message);
+    }
+  }
+
+  // ⌨️ Keyboard Shortcuts Listener (No prompt when pressing X!)
+  const handleKeyDown = useCallback((e) => {
+    if (!inspectArtwork) return;
+    if (e.key === 'a' || e.key === 'A') {
+      approve(inspectArtwork, false);
+    } else if (e.key === 'f' || e.key === 'F') {
+      approve(inspectArtwork, true);
+    } else if (e.key === 'x' || e.key === 'X') {
+      reject(inspectArtwork, true); // Instant reject without prompt
+    } else if (e.key === 'Escape') {
+      setInspectArtwork(null);
+    }
+  }, [inspectArtwork]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
   return (
     <div style={{
       flex: 1,
@@ -95,20 +131,17 @@ export default function Admin() {
     }}>
       <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
 
-        {/* 1. Login Screen (if not logged in) */}
         {!session ? (
           <div style={{
             maxWidth: '420px',
             margin: '60px auto',
             background: 'rgba(255, 255, 255, 0.96)',
-            backdropFilter: 'blur(8px)',
             borderRadius: '12px',
             padding: '30px',
             boxShadow: '0 12px 35px rgba(0,0,0,0.3)',
             color: '#111'
           }}>
             <h2 style={{ marginTop: 0, color: '#000', fontSize: '22px' }}>Admin Login 🛡️</h2>
-            <p style={{ color: '#444', fontSize: '14px', marginBottom: '20px' }}>Log in to access the community review queue.</p>
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <input 
                 type="email" 
@@ -116,7 +149,7 @@ export default function Admin() {
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 required 
-                style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' }}
+                style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #ccc' }}
               />
               <input 
                 type="password" 
@@ -124,80 +157,102 @@ export default function Admin() {
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 required 
-                style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' }}
+                style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid #ccc' }}
               />
               <button 
                 type="submit" 
-                style={{ 
-                  background: '#ff9800', 
-                  color: '#000', 
-                  border: 'none', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
-                  fontWeight: 'bold', 
-                  fontSize: '15px', 
-                  cursor: 'pointer' 
-                }}
+                style={{ background: '#ff9800', color: '#000', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
               >
                 Log In to Admin
               </button>
             </form>
           </div>
         ) : (
-          /* 2. Moderation Dashboard */
           <>
-            {/* Header Banner */}
             <header style={{
               background: 'rgba(255, 255, 255, 0.96)',
               backdropFilter: 'blur(8px)',
               padding: '18px 24px',
               borderRadius: '12px',
               boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-              marginBottom: '24px',
-              color: '#111',
+              marginBottom: '20px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '14px'
             }}>
               <div>
                 <h1 style={{ margin: 0, fontSize: '24px', color: '#000', fontWeight: 'bold' }}>
                   Moderation Queue 🛡️
                 </h1>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>
-                  Review artwork, check for copycats, and inspect Pokémon names.
+                <p style={{ margin: '4px 0 0 0', color: '#444', fontSize: '14px' }}>
+                  Hotkeys in enlarged viewer: <strong>[A]</strong> Approve &bull; <strong>[F]</strong> Star &bull; <strong>[X]</strong> Instant Reject
                 </p>
               </div>
 
-              <div style={{
-                background: pendingList.length > 0 ? '#fff3e0' : '#e8f5e9',
-                color: pendingList.length > 0 ? '#bf360c' : '#1b5e20',
-                border: `1px solid ${pendingList.length > 0 ? '#ffe0b2' : '#c8e6c9'}`,
-                padding: '8px 16px',
-                borderRadius: '20px',
-                fontWeight: 'bold',
-                fontSize: '14px'
-              }}>
-                {pendingList.length} Pending {pendingList.length === 1 ? 'Drawing' : 'Drawings'}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: streamerMode ? '#fee2e2' : '#f3f4f6',
+                  color: streamerMode ? '#991b1b' : '#374151',
+                  border: `1.5px solid ${streamerMode ? '#f87171' : '#d1d5db'}`,
+                  padding: '8px 14px',
+                  borderRadius: '20px',
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={streamerMode}
+                    onChange={(e) => setStreamerMode(e.target.checked)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  🛡️ Streamer Safe Mode (Blur Art)
+                </label>
+
+                {pendingList.length > 1 && (
+                  <button
+                    onClick={approveAllVisible}
+                    style={{
+                      background: '#15803d',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      fontWeight: 'bold',
+                      fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⚡ Approve All ({pendingList.length})
+                  </button>
+                )}
+
+                <div style={{
+                  background: pendingList.length > 0 ? '#fff3e0' : '#e8f5e9',
+                  color: pendingList.length > 0 ? '#bf360c' : '#1b5e20',
+                  padding: '8px 14px',
+                  borderRadius: '20px',
+                  fontWeight: 'bold',
+                  fontSize: '13px'
+                }}>
+                  {pendingList.length} Pending
+                </div>
               </div>
             </header>
 
             {loading ? (
               <p style={{ color: '#fff', textAlign: 'center', padding: '40px', fontSize: '18px' }}>Loading queue...</p>
             ) : pendingList.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '60px 20px',
-                background: 'rgba(255, 255, 255, 0.96)',
-                borderRadius: '12px',
-                color: '#111'
-              }}>
-                <h2 style={{ margin: '0 0 8px 0', color: '#000' }}>Queue is all clear!</h2>
-                <p style={{ color: '#444' }}>No drawings are currently waiting for your review.</p>
+              <div style={{ textAlign: 'center', padding: '60px 20px', background: 'rgba(255, 255, 255, 0.96)', borderRadius: '12px', color: '#111' }}>
+                <h2 style={{ margin: '0 0 8px 0', color: '#000' }}>Queue is all clear! 🎉</h2>
+                <p style={{ color: '#444' }}>No drawings are currently waiting for review.</p>
               </div>
             ) : (
-              /* Review Cards Grid */
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
                 {pendingList.map((item) => (
                   <div
@@ -209,11 +264,9 @@ export default function Admin() {
                       border: '1px solid #ccc',
                       boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
                       display: 'flex',
-                      flexDirection: 'column',
-                      color: '#111'
+                      flexDirection: 'column'
                     }}
                   >
-                    {/* Big Clickable Image Preview */}
                     <div 
                       onClick={() => setInspectArtwork(item)}
                       title="Click to inspect full-size image"
@@ -225,70 +278,64 @@ export default function Admin() {
                         justifyContent: 'center',
                         padding: '10px',
                         cursor: 'zoom-in',
-                        position: 'relative'
+                        position: 'relative',
+                        overflow: 'hidden'
                       }}
                     >
                       <img 
                         src={item.image_url} 
                         alt={item.pokemon_name} 
-                        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '100%',
+                          objectFit: 'contain',
+                          filter: streamerMode ? 'blur(22px)' : 'none',
+                          transition: 'filter 0.2s ease'
+                        }} 
                       />
-                      <span style={{
-                        position: 'absolute',
-                        bottom: '8px',
-                        right: '8px',
-                        background: 'rgba(0,0,0,0.7)',
-                        color: '#fff',
-                        fontSize: '11px',
-                        padding: '3px 8px',
-                        borderRadius: '4px'
-                      }}>
-                        🔍 Enlarge
-                      </span>
+                      {streamerMode && (
+                        <div style={{
+                          position: 'absolute',
+                          background: 'rgba(0,0,0,0.7)',
+                          color: '#fff',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          pointerEvents: 'none'
+                        }}>
+                        Click to Reveal
+                        </div>
+                      )}
                     </div>
 
-                    {/* Metadata & Actions */}
-                    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                    <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                       <div>
-                        <div style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Pokémon Name</div>
-                        <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#000' }}>{item.pokemon_name}</div>
+                        <span style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Pokémon</span>
+                        <div style={{ fontSize: '17px', fontWeight: 'bold', color: '#000' }}>{item.pokemon_name}</div>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Artist</span>
+                        <div style={{ fontSize: '14px', color: '#222', fontWeight: '600' }}>{item.artist_name}</div>
                       </div>
 
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Artist Handle</div>
-                        <div style={{ fontSize: '15px', color: '#222', fontWeight: '600' }}>{item.artist_name}</div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', paddingTop: '10px' }}>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px' }}>
                         <button
-                          onClick={() => approve(item)}
-                          style={{
-                            flex: 1,
-                            background: '#22c55e',
-                            color: '#000',
-                            border: 'none',
-                            padding: '10px',
-                            borderRadius: '6px',
-                            fontWeight: 'bold',
-                            fontSize: '14px',
-                            cursor: 'pointer'
-                          }}
+                          onClick={() => approve(item, false)}
+                          style={{ flex: 1, background: '#22c55e', color: '#000', border: 'none', padding: '9px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
                         >
                           Approve ✅
                         </button>
                         <button
-                          onClick={() => reject(item)}
-                          style={{
-                            flex: 1,
-                            background: '#ef4444',
-                            color: '#fff',
-                            border: 'none',
-                            padding: '10px',
-                            borderRadius: '6px',
-                            fontWeight: 'bold',
-                            fontSize: '14px',
-                            cursor: 'pointer'
-                          }}
+                          onClick={() => approve(item, true)}
+                          title="Star as Staff Pick!"
+                          style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '9px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+                        >
+                          ⭐
+                        </button>
+                        <button
+                          onClick={() => reject(item, false)}
+                          style={{ flex: 1, background: '#ef4444', color: '#fff', border: 'none', padding: '9px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
                         >
                           Reject ❌
                         </button>
@@ -299,7 +346,7 @@ export default function Admin() {
               </div>
             )}
 
-            {/* Inspection Lightbox Modal */}
+            {/* Lightbox Viewer (Press A, F, or X here for instant moderation) */}
             {inspectArtwork && (
               <div 
                 onClick={() => setInspectArtwork(null)} 
@@ -309,7 +356,7 @@ export default function Admin() {
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.92)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -326,8 +373,7 @@ export default function Admin() {
                     maxHeight: '92vh',
                     overflow: 'hidden',
                     display: 'flex',
-                    flexDirection: 'column',
-                    boxShadow: '0 12px 35px rgba(0,0,0,0.6)'
+                    flexDirection: 'column'
                   }}
                 >
                   <div style={{ maxHeight: '72vh', background: '#0a0a0a', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px' }}>
@@ -338,30 +384,36 @@ export default function Admin() {
                     />
                   </div>
 
-                  <div style={{ padding: '16px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', color: '#111', flexWrap: 'wrap', gap: '15px' }}>
+                  <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', flexWrap: 'wrap', gap: '10px' }}>
                     <div>
-                      <h2 style={{ margin: 0, color: '#000', fontSize: '20px' }}>{inspectArtwork.pokemon_name}</h2>
-                      <p style={{ margin: '4px 0 0 0', color: '#444', fontSize: '14px' }}>Artist: <strong>{inspectArtwork.artist_name}</strong></p>
+                      <h2 style={{ margin: 0, color: '#000', fontSize: '18px' }}>{inspectArtwork.pokemon_name}</h2>
+                      <p style={{ margin: '2px 0 0 0', color: '#444', fontSize: '13px' }}>Artist: <strong>{inspectArtwork.artist_name}</strong></p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '10px' }}>
                       <button
-                        onClick={() => approve(inspectArtwork)}
-                        style={{ background: '#22c55e', color: '#000', border: 'none', padding: '9px 18px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                        onClick={() => approve(inspectArtwork, false)}
+                        style={{ background: '#22c55e', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
-                        Approve ✅
+                        Approve [A] ✅
                       </button>
                       <button
-                        onClick={() => reject(inspectArtwork)}
-                        style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '9px 18px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                        onClick={() => approve(inspectArtwork, true)}
+                        style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
-                        Reject ❌
+                        ⭐ Star [F]
+                      </button>
+                      <button
+                        onClick={() => reject(inspectArtwork, true)}
+                        style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                      >
+                        Reject [X] ❌
                       </button>
                       <button
                         onClick={() => setInspectArtwork(null)}
-                        style={{ background: '#eee', color: '#111', border: '1px solid #ccc', padding: '9px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                        style={{ background: '#eee', color: '#111', border: '1px solid #ccc', padding: '8px 14px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
-                        Close
+                        Close [Esc]
                       </button>
                     </div>
                   </div>

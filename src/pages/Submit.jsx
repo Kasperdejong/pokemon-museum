@@ -1,12 +1,29 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import imageCompression from 'browser-image-compression';
-import { useNavigate } from 'react-router-dom';
-import pokedex from '../data/pokedex.json';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import pokedex from '../data/pokédex.json';
+
+function parsePokeId(rawId) {
+  if (!rawId) return null;
+  const cleaned = String(rawId).replace(/[^0-9]/g, '');
+  const num = parseInt(cleaned, 10);
+  return isNaN(num) ? null : num;
+}
 
 const COOLDOWN_KEY = 'poke_museum_last_submit';
-const COOLDOWN_MS = 5 * 60 * 1000; // ⏱️ 5 Minutes
+const COOLDOWN_MS = 3 * 60 * 1000;
 const HANDLES_KEY = 'poke_my_claimed_handles';
+
+const BANNED_PATTERNS = [
+  /penis/i, /cock/i, /dick/i, /vagina/i, /pussy/i, /nigger/i, /faggot/i, /hitler/i,
+  /nazi/i, /porn/i, /sex/i, /tits/i, /boobs/i, /retard/i, /cunt/i, /whore/i, /slut/i,
+  /\.com/i, /\.net/i, /\.org/i, /\.gg/i, /https?:\/\//i
+];
+
+function isForbiddenHandle(name) {
+  return BANNED_PATTERNS.some((pattern) => pattern.test(name));
+}
 
 function getOrCreateDeviceId() {
   let id = localStorage.getItem('poke_device_id');
@@ -18,9 +35,12 @@ function getOrCreateDeviceId() {
 }
 
 export default function Submit() {
+  const [searchParams] = useSearchParams();
+  const prefillPokemon = searchParams.get('pokemon');
+
   const [artistName, setArtistName] = useState('');
   const [savedHandles, setSavedHandles] = useState([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(prefillPokemon || '');
   const [selectedPokemon, setSelectedPokemon] = useState(null);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -42,6 +62,18 @@ export default function Submit() {
     if (active) setArtistName(active);
     else if (handles.length > 0) setArtistName(handles[0]);
 
+    if (prefillPokemon) {
+      const num = parsePokeId(prefillPokemon);
+      const found = pokedex.find((p) => 
+        (num !== null && parsePokeId(p.id) === num) ||
+        p.name?.english?.toLowerCase() === prefillPokemon.toLowerCase()
+      );
+      if (found) {
+        setSelectedPokemon(found);
+        setQuery(`${found.name.english} (#${parsePokeId(found.id)})`);
+      }
+    }
+
     const checkCooldown = () => {
       const lastSubmit = localStorage.getItem(COOLDOWN_KEY);
       if (lastSubmit) {
@@ -57,33 +89,40 @@ export default function Submit() {
     checkCooldown();
     const timer = setInterval(checkCooldown, 15000);
     return () => clearInterval(timer);
-  }, []);
+  }, [prefillPokemon]);
 
+  // 🔍 Suggestions: Matches names or numbers (e.g. 181, 25)
   const filteredSuggestions = useMemo(() => {
     if (!query.trim() || selectedPokemon) return [];
     const q = query.toLowerCase().trim();
+    const isOnlyDigits = /^#?\d+$/.test(q);
+    const searchNumber = parsePokeId(q);
+
     return pokedex
-      .filter((p) =>
-        p.name.english.toLowerCase().includes(q) ||
-        (p.name.french && p.name.french.toLowerCase().includes(q)) ||
-        p.name.japanese.includes(q) ||
-        p.name.chinese.includes(q)
-      )
+      .filter((p) => {
+        const pNum = parsePokeId(p.id);
+
+        if (isOnlyDigits && searchNumber !== null && pNum !== null) {
+          return pNum === searchNumber || String(pNum).startsWith(String(searchNumber));
+        }
+
+        return (
+          p.name?.english?.toLowerCase().includes(q) ||
+          (p.name?.japanese && p.name.japanese.includes(q))
+        );
+      })
+      .sort((a, b) => {
+        if (searchNumber !== null) {
+          const aNum = parsePokeId(a.id);
+          const bNum = parsePokeId(b.id);
+          if (aNum === searchNumber) return -1;
+          if (bNum === searchNumber) return 1;
+          return aNum - bNum;
+        }
+        return 0;
+      })
       .slice(0, 6);
   }, [query, selectedPokemon]);
-
-  function getImageDimensions(fileObj) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = URL.createObjectURL(fileObj);
-      img.onload = () => {
-        const dims = { width: img.naturalWidth, height: img.naturalHeight };
-        URL.revokeObjectURL(img.src);
-        resolve(dims);
-      };
-      img.onerror = () => reject(new Error('Invalid image file'));
-    });
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -93,16 +132,20 @@ export default function Submit() {
       return;
     }
 
-    const matched = selectedPokemon || pokedex.find(
-      (p) =>
-        p.name.english.toLowerCase() === query.trim().toLowerCase() ||
-        (p.name.french && p.name.french.toLowerCase() === query.trim().toLowerCase()) ||
-        p.name.japanese === query.trim() ||
-        p.name.chinese === query.trim()
-    );
+    const queryTrimmed = query.trim();
+    const queryNum = parsePokeId(queryTrimmed);
+
+    const matched = selectedPokemon || pokedex.find((p) => {
+      const pNum = parsePokeId(p.id);
+      return (
+        (queryNum !== null && pNum === queryNum) ||
+        p.name?.english?.toLowerCase() === queryTrimmed.toLowerCase() ||
+        (p.name?.japanese && p.name.japanese === queryTrimmed)
+      );
+    });
 
     if (!matched) {
-      alert('Please select a valid Pokémon from the list!');
+      alert('Please select a valid Pokémon name or #ID from the list!');
       return;
     }
 
@@ -111,33 +154,32 @@ export default function Submit() {
       return;
     }
 
-    if (file.size > 15 * 1024 * 1024) {
-      alert('File is too large! Maximum raw upload size is 15 MB.');
+    const cleanArtistName = artistName.trim();
+
+    if (isForbiddenHandle(cleanArtistName)) {
+      alert('Inappropriate or invalid artist handle. Please choose a family-friendly handle without links.');
       return;
     }
 
     try {
       setUploading(true);
 
-      if (!isAdmin && artistName.trim().toLowerCase() === 'kavhan') {
-        throw new Error('The artist name "Kavhan" is reserved exclusively for the instructor! Please use your own artist handle.');
+      if (!isAdmin && cleanArtistName.toLowerCase() === 'kavhan') {
+        throw new Error('The artist name "Kavhan" is reserved exclusively for the instructor!');
       }
 
-      const finalArtistName = (isAdmin && artistName.trim().toLowerCase() === 'kavhan')
+      const finalArtistName = (isAdmin && cleanArtistName.toLowerCase() === 'kavhan')
         ? 'Kavhan'
-        : artistName.trim();
+        : cleanArtistName;
 
       const deviceId = getOrCreateDeviceId();
 
-      // Max 3 handles check
       if (!isAdmin) {
         const myHandles = JSON.parse(localStorage.getItem(HANDLES_KEY) || '[]');
         const isExistingOnDevice = myHandles.some((h) => h.toLowerCase() === finalArtistName.toLowerCase());
 
         if (!isExistingOnDevice && myHandles.length >= 3) {
-          throw new Error(
-            `You can only register up to 3 artist handles on this device! Your current handles: ${myHandles.join(', ')}`
-          );
+          throw new Error(`You can only register up to 3 artist handles on this device! Current: ${myHandles.join(', ')}`);
         }
       }
 
@@ -151,7 +193,7 @@ export default function Submit() {
       if (claimError) throw claimError;
 
       if (!isAuthorized) {
-        throw new Error(`The artist name "${artistName}" was already claimed on another device! Please pick your own unique artist handle.`);
+        throw new Error(`The artist name "${artistName}" was already claimed on another device!`);
       }
 
       if (!isAdmin) {
@@ -164,16 +206,7 @@ export default function Submit() {
 
       localStorage.setItem('poke_active_artist', finalArtistName);
 
-      setStatusMsg('Checking image dimensions...');
-      const { width, height } = await getImageDimensions(file);
-
-      if (width < 16 || height < 16) throw new Error('Image is too small or invalid.');
-      if (width > 8000 || height > 8000) throw new Error('Image dimensions are too huge (max 8000px per side).');
-
-      const aspectRatio = width / height;
-      if (aspectRatio < 0.12 || aspectRatio > 8.0) throw new Error('Image aspect ratio is too extreme (max 8:1 ratio).');
-
-      setStatusMsg('Optimizing & compressing image...');
+      setStatusMsg('Compressing image to WebP...');
       const options = {
         maxSizeMB: 0.2,
         maxWidthOrHeight: 1200,
@@ -214,12 +247,12 @@ export default function Submit() {
           pokemon_name: matched.name.english,
           image_url: publicUrl,
           is_approved: false,
-          delete_token: deleteToken
+          delete_token: deleteToken,
+          device_id: deviceId
         }]);
 
       if (dbErr) throw dbErr;
 
-      // 💾 INSTANT VISUAL FEEDBACK: Save to device memory immediately!
       const stored = JSON.parse(localStorage.getItem('poke_my_submissions') || '[]');
       stored.unshift({
         id: submissionId,
@@ -236,7 +269,7 @@ export default function Submit() {
         localStorage.setItem(COOLDOWN_KEY, Date.now().toString());
       }
 
-      alert(`Drawing of ${matched.name.english} submitted! Taking you to your submissions.`);
+      alert(`Drawing of #${parsePokeId(matched.id)} ${matched.name.english} submitted for review!`);
       navigate('/my-submissions');
     } catch (err) {
       console.error(err);
@@ -276,40 +309,31 @@ export default function Submit() {
         <h2 style={{ marginTop: 0, color: '#000', fontSize: '22px' }}>Submit Your Pokémon Drawing</h2>
 
         {isAdmin && (
-          <div style={{ padding: '8px 12px', background: '#e8f5e9', color: '#1b5e20', borderRadius: '4px', marginBottom: '16px', fontSize: '13px', fontWeight: 'bold', border: '1px solid #c8e6c9' }}>
-            👑 Admin Mode: Cooldown bypassed.
+          <div style={{ padding: '8px 12px', background: '#e8f5e9', color: '#1b5e20', borderRadius: '4px', marginBottom: '16px', fontSize: '13px', fontWeight: 'bold' }}>
+            👑 Admin Mode Active
           </div>
         )}
 
         {!isAdmin && cooldownRemaining > 0 ? (
           <div style={{ padding: '15px', background: '#ffebee', color: '#b71c1c', borderRadius: '6px', border: '1px solid #ffcdd2' }}>
             ⏳ Cooldown active: You can submit another drawing in <strong>{cooldownRemaining} minute(s)</strong>.
-            <br /><br />
-            <small>Did you upload the wrong file? Go to <strong>My Submissions</strong> to retract it and reset your timer immediately.</small>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontWeight: 'bold', color: '#111' }}>
-                  Artist Name / Handle (Max 3 per device):
-                </label>
+                <label style={{ fontWeight: 'bold', color: '#111' }}>Artist Name / Handle:</label>
                 {savedHandles.length > 0 && (
                   <select
-                    onChange={(e) => {
-                      if (e.target.value) setArtistName(e.target.value);
-                    }}
+                    onChange={(e) => { if (e.target.value) setArtistName(e.target.value); }}
                     value=""
-                    style={{ fontSize: '12px', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccc', cursor: 'pointer' }}
+                    style={{ fontSize: '12px', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccc' }}
                   >
-                    <option value="">Choose saved handle...</option>
-                    {savedHandles.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
+                    <option value="">Select saved handle...</option>
+                    {savedHandles.map((h) => <option key={h} value={h}>{h}</option>)}
                   </select>
                 )}
               </div>
-
               <input
                 type="text"
                 maxLength={30}
@@ -319,14 +343,11 @@ export default function Submit() {
                 required
                 style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '6px', border: '1.5px solid #ccc' }}
               />
-              <small style={{ color: '#555', marginTop: '4px', display: 'block' }}>
-                Your handle is locked to this device so nobody can impersonate you.
-              </small>
             </div>
 
             <div style={{ position: 'relative' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#111' }}>
-                Pokémon Drawn:
+                Pokémon Drawn (Search Name or Number e.g. 181):
               </label>
               <input
                 type="text"
@@ -335,7 +356,7 @@ export default function Submit() {
                   setQuery(e.target.value);
                   setSelectedPokemon(null);
                 }}
-                placeholder="Search Pokémon name..."
+                placeholder="Search Pokémon name or number..."
                 required
                 style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '6px', border: '1.5px solid #ccc' }}
               />
@@ -355,27 +376,28 @@ export default function Submit() {
                   zIndex: 10,
                   boxShadow: '0 6px 12px rgba(0,0,0,0.15)'
                 }}>
-                  {filteredSuggestions.map((p) => (
-                    <li
-                      key={p.id}
-                      onClick={() => {
-                        setSelectedPokemon(p);
-                        setQuery(`${p.name.english} (#${p.id})`);
-                      }}
-                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #eee', color: '#111' }}
-                      onMouseEnter={(e) => (e.target.style.background = '#f2f2f2')}
-                      onMouseLeave={(e) => (e.target.style.background = '#fff')}
-                    >
-                      #{p.id} <strong>{p.name.english}</strong> {p.name.japanese ? `(${p.name.japanese})` : ''}
-                    </li>
-                  ))}
+                  {filteredSuggestions.map((p) => {
+                    const cleanNum = parsePokeId(p.id);
+                    return (
+                      <li
+                        key={p.id}
+                        onClick={() => {
+                          setSelectedPokemon(p);
+                          setQuery(`${p.name.english} (#${cleanNum})`);
+                        }}
+                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #eee', color: '#111' }}
+                      >
+                        #{cleanNum} <strong>{p.name.english}</strong> {p.name?.japanese ? `(${p.name.japanese})` : ''}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
 
             <div>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#111' }}>
-                Drawing (PNG, JPG, WebP — Max 8:1 comic ratio):
+                Drawing (PNG, JPG, WebP):
               </label>
               <input
                 type="file"
@@ -397,38 +419,13 @@ export default function Submit() {
                 borderRadius: '6px',
                 cursor: uploading ? 'not-allowed' : 'pointer',
                 fontWeight: 'bold',
-                fontSize: '16px',
-                boxShadow: '0 3px 8px rgba(0,0,0,0.25)'
+                fontSize: '16px'
               }}
             >
               {uploading ? statusMsg || 'Processing...' : 'Submit to Museum 🎨'}
             </button>
           </form>
         )}
-      </div>
-
-      <div style={{
-        position: 'absolute',
-        bottom: '8px',
-        right: '12px',
-        fontSize: '11px',
-        color: '#ffffff',
-        opacity: 0.45,
-        transition: 'opacity 0.2s ease',
-        textShadow: '0 1px 2px rgba(0,0,0,0.75)'
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.45')}
-      >
-        credit for the background goes to{' '}
-        <a 
-          href="https://www.reddit.com/r/wallpapers/comments/12xf50o/i_made_a_pokemon_koi_pond_wallpaper_3840_x_2160/" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          style={{ color: '#fff', textDecoration: 'underline' }}
-        >
-          CarolynDesign
-        </a>
       </div>
     </div>
   );

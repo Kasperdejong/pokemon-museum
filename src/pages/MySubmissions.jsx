@@ -10,8 +10,8 @@ export default function MySubmissions() {
   const [activeArtist, setActiveArtist] = useState('');
   const [allSubmissions, setAllSubmissions] = useState([]);
   const [statusMap, setStatusMap] = useState({});
-  const [viewMode, setViewMode] = useState('showcase'); // 'showcase' (Big museum cards) or 'manage' (Retract list)
-  const [selectedArtwork, setSelectedArtwork] = useState(null); // 🔍 Click-to-zoom modal
+  const [viewMode, setViewMode] = useState('showcase');
+  const [selectedArtwork, setSelectedArtwork] = useState(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -22,19 +22,29 @@ export default function MySubmissions() {
     const active = localStorage.getItem('poke_active_artist') || handles[0] || '';
     setActiveArtist(active);
 
-    // 2. Load all submissions from device memory for INSTANT visual feedback
+    // 2. Load cached submissions from device memory
     const local = JSON.parse(localStorage.getItem('poke_my_submissions') || '[]');
     setAllSubmissions(local);
 
-    // 3. Sync live approval status with Supabase
+    // 3. 🧹 Check live status and PURGE deleted/rejected items!
     if (local.length > 0) {
       const ids = local.map((item) => item.id);
+
       supabase
-        .from('submissions')
-        .select('id, is_approved')
-        .in('id', ids)
-        .then(({ data }) => {
+        .rpc('check_submissions_status', { p_ids: ids })
+        .then(({ data, error }) => {
           if (data) {
+            const existingMap = new Map(data.map((r) => [r.id, r.is_approved]));
+
+            // Only keep items that ACTUALLY still exist in the database!
+            const stillExisting = local.filter((item) => existingMap.has(item.id));
+
+            // If any drawings were deleted by the admin, scrub them from localStorage immediately!
+            if (stillExisting.length !== local.length) {
+              localStorage.setItem('poke_my_submissions', JSON.stringify(stillExisting));
+              setAllSubmissions(stillExisting);
+            }
+
             const map = {};
             data.forEach((row) => {
               map[row.id] = row.is_approved ? 'approved' : 'pending';
@@ -137,7 +147,7 @@ export default function MySubmissions() {
                 {activeArtist ? `${activeArtist}'s Museum 🎨` : 'My Submissions'}
               </h1>
 
-              {/* 🔄 Instant Dropdown Switcher for handles on this device */}
+              {/* 🔄 Instant Dropdown Switcher */}
               {savedHandles.length > 1 && (
                 <select
                   value={activeArtist}
@@ -154,7 +164,7 @@ export default function MySubmissions() {
                   }}
                 >
                   {savedHandles.map((h) => (
-                    <option key={h} value={h}>{h}</option>
+                    <option key={h} value={h}>👤 {h}</option>
                   ))}
                 </select>
               )}
@@ -249,7 +259,7 @@ export default function MySubmissions() {
                   boxShadow: viewMode === 'manage' ? '0 2px 5px rgba(0,0,0,0.2)' : 'none'
                 }}
               >
-                ⚙️ Manage & Retract
+                ⚙️ Manage drawings
               </button>
             </div>
 
@@ -292,7 +302,7 @@ export default function MySubmissions() {
             </Link>
           </div>
         ) : viewMode === 'showcase' ? (
-          /* 🏛️ VIEW 1: Big Museum Showcase Grid (Artwork 100% Unobstructed, Click to Zoom) */
+          /* 🏛️ VIEW 1: Museum Showcase Grid */
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
@@ -328,7 +338,6 @@ export default function MySubmissions() {
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
                   }}
                 >
-                  {/* Clean Matte Frame — 0 Stickers on top of the art! */}
                   <div style={{ 
                     height: '240px', 
                     background: '#f2f4f7', 
@@ -344,7 +353,6 @@ export default function MySubmissions() {
                     />
                   </div>
 
-                  {/* Card Info: Pokémon & Artist on Left, Status Badge in Bottom Right */}
                   <div style={{ 
                     padding: '14px', 
                     display: 'flex', 
@@ -361,7 +369,6 @@ export default function MySubmissions() {
                       </p>
                     </div>
 
-                    {/* 📍 Status badge sits below image in bottom-right (never covers art) */}
                     <span style={{
                       fontSize: '11px',
                       fontWeight: 'bold',
@@ -380,7 +387,7 @@ export default function MySubmissions() {
             })}
           </div>
         ) : (
-          /* ⚙️ VIEW 2: Dedicated Manage & Retract List */
+          /* ⚙️ VIEW 2: Manage & Retract List */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {filteredList.map((item) => {
               const status = statusMap[item.id] || (item.is_approved ? 'approved' : 'pending');
@@ -452,7 +459,6 @@ export default function MySubmissions() {
                     )}
                   </div>
 
-                  {/* 🔴 Retract Button locked in this management tab */}
                   <button
                     onClick={(e) => handleRetract(item, e)}
                     style={{
@@ -468,7 +474,7 @@ export default function MySubmissions() {
                       boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                     }}
                   >
-                    Retract & Reset Cooldown ↺
+                    Delete drawing
                   </button>
                 </div>
               );

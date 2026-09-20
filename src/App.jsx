@@ -8,6 +8,18 @@ import { supabase } from './supabaseClient';
 
 function NavigationBar({ session, setSession }) {
   const navigate = useNavigate();
+  const [artCount, setArtCount] = useState(null);
+
+  useEffect(() => {
+    // Fetch live global count of approved artwork
+    supabase
+      .from('submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_approved', true)
+      .then(({ count }) => {
+        if (count !== null) setArtCount(count);
+      });
+  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -29,8 +41,8 @@ function NavigationBar({ session, setSession }) {
           Pokémon Museum
         </Link>
         <Link to="/kavhan" style={{ color: '#ff9800', textDecoration: 'none', fontWeight: 'bold', fontSize: '15px' }}>
-        Kavhan's Drawings
-      </Link>
+          Kavhan's Drawings
+        </Link>
         <Link to="/submit" style={{ color: '#ddd', textDecoration: 'none', fontSize: '15px' }}>
           Submit Art
         </Link>
@@ -40,6 +52,20 @@ function NavigationBar({ session, setSession }) {
       </div>
 
       <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+        {artCount !== null && (
+          <span style={{
+            background: 'rgba(255, 255, 255, 0.12)',
+            color: '#ffcb05',
+            padding: '5px 12px',
+            borderRadius: '16px',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            border: '1px solid rgba(255, 203, 5, 0.3)'
+          }}>
+            🎨 {artCount} {artCount === 1 ? 'Total Drawing' : 'Total Drawings'}
+          </span>
+        )}
+
         {session && (
           <>
             <Link 
@@ -54,7 +80,7 @@ function NavigationBar({ session, setSession }) {
                 fontWeight: 'bold'
               }}
             >
-              👑 Admin Dashboard
+              Admin Dashboard
             </Link>
             <button
               onClick={handleLogout}
@@ -98,8 +124,7 @@ export default function App() {
         <NavigationBar session={session} setSession={setSession} />
 
         <main style={{ flex: 1 }}>
-         <Routes>
-            {/* 🔑 Adding unique keys forces React to cleanly re-fetch every time */}
+          <Routes>
             <Route path="/" element={<Gallery key="museum" />} />
             <Route path="/kavhan" element={<Gallery key="kavhan" instructorMode={true} />} />
             <Route path="/artist/:artistParam" element={<Gallery key="artist" />} />
@@ -109,7 +134,6 @@ export default function App() {
           </Routes>
         </main>
 
-        {/* 📍 Floating Global Copyright: Sticks to bottom-left on ALL pages without any footer block */}
         <div style={{
           position: 'fixed',
           bottom: '8px',
@@ -118,9 +142,9 @@ export default function App() {
           color: '#888',
           opacity: 0.6,
           zIndex: 90,
-          pointerEvents: 'none', // Lets viewers click things behind it
+          pointerEvents: 'none',
           userSelect: 'none',
-          textShadow: '0 0 3px rgba(255,255,255,0.8), 0 1px 2px rgba(0,0,0,0.3)' // Legible on both light and dark backgrounds
+          textShadow: '0 0 3px rgba(255,255,255,0.8), 0 1px 2px rgba(0,0,0,0.3)'
         }}>
           Pokémon Community Museum &copy; {new Date().getFullYear()}
         </div>
