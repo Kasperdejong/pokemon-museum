@@ -347,7 +347,7 @@ export default function Submit() {
 
             <div style={{ position: 'relative' }}>
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 'bold', color: '#111' }}>
-                Pokémon Drawn (Search Name or Number e.g. 181):
+                Pokémon Drawn (Search Name or Number e.g. 472):
               </label>
               <input
                 type="text"

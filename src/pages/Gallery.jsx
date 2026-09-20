@@ -76,6 +76,19 @@ export default function Gallery({ instructorMode = false }) {
     }
   }
 
+  function handleArtistClick(artistName, e) {
+    if (e) e.stopPropagation();
+    setArtistSearch(artistName);
+    setSearchParams({ artist: artistName });
+    if (selectedArtwork) setSelectedArtwork(null);
+  }
+
+  function clearAllFilters() {
+    setPokemonSearch('');
+    setArtistSearch('');
+    setSearchParams({});
+  }
+
   async function handleDelete(item, e) {
     if (e) e.stopPropagation();
 
@@ -145,7 +158,6 @@ export default function Gallery({ instructorMode = false }) {
         if (!cleanSearch) {
           matchesPokemon = true;
         } else if (isOnlyDigits && searchNumber !== null && pNum !== null) {
-          // If searching with numbers (e.g. 181, 25, or 18)
           matchesPokemon = pNum === searchNumber || String(pNum).startsWith(String(searchNumber));
         } else {
           matchesPokemon = (
@@ -175,6 +187,8 @@ export default function Gallery({ instructorMode = false }) {
     const startIdx = (currentPage - 1) * pageSize;
     return filteredDrawings.slice(startIdx, startIdx + pageSize);
   }, [filteredDrawings, currentPage, pageSize]);
+
+  const hasActiveFilters = pokemonSearch.trim() !== '' || artistSearch.trim() !== '';
 
   return (
     <div style={{
@@ -273,7 +287,10 @@ export default function Gallery({ instructorMode = false }) {
               type="text"
               placeholder="🎨 Search Artist..."
               value={artistSearch}
-              onChange={(e) => setArtistSearch(e.target.value)}
+              onChange={(e) => {
+                setArtistSearch(e.target.value);
+                if (!e.target.value) setSearchParams({});
+              }}
               style={{ padding: '9px 14px', flex: '1', minWidth: '160px', borderRadius: '6px', border: '1.5px solid #ccc' }}
             />
           )}
@@ -298,6 +315,24 @@ export default function Gallery({ instructorMode = false }) {
             <option value={48}>48 / page</option>
             <option value={96}>96 / page</option>
           </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              style={{
+                background: '#ffebee',
+                border: '1.5px solid #ffcdd2',
+                color: '#b71c1c',
+                padding: '9px 14px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '13px'
+              }}
+            >
+              ✕ Reset
+            </button>
+          )}
         </div>
 
         {/* Gallery Grid */}
@@ -306,6 +341,23 @@ export default function Gallery({ instructorMode = false }) {
         ) : filteredDrawings.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '50px 20px', background: 'rgba(255,255,255,0.95)', borderRadius: '12px' }}>
             <h3>No drawings found!</h3>
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                style={{
+                  marginTop: '12px',
+                  background: '#ff9800',
+                  color: '#000',
+                  border: '1.5px solid #000',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Clear Search
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -354,14 +406,25 @@ export default function Gallery({ instructorMode = false }) {
                     />
                   </div>
 
-                  {/* Clean Title: Number removed from card, just the Pokémon Name */}
                   <div style={{ padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#000', fontWeight: 'bold' }}>
                         {item.pokemon_name}
                       </h3>
                       <p style={{ margin: 0, fontSize: '13px', color: '#444' }}>
-                        By: <span style={{ color: '#0070f3', fontWeight: 'bold' }}>{item.artist_name}</span>
+                        By:{' '}
+                        <span 
+                          onClick={(e) => handleArtistClick(item.artist_name, e)}
+                          title={`Filter by artist ${item.artist_name}`}
+                          style={{ 
+                            color: '#0070f3', 
+                            textDecoration: 'underline', 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold' 
+                          }}
+                        >
+                          {item.artist_name}
+                        </span>
                       </p>
                     </div>
 
@@ -477,7 +540,21 @@ export default function Gallery({ instructorMode = false }) {
               <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
                   <h2 style={{ margin: 0 }}>{selectedArtwork.pokemon_name}</h2>
-                  <p style={{ margin: '4px 0 0 0' }}>Drawn by: <strong>{selectedArtwork.artist_name}</strong></p>
+                  <p style={{ margin: '4px 0 0 0' }}>
+                    Drawn by:{' '}
+                    <span 
+                      onClick={() => handleArtistClick(selectedArtwork.artist_name)}
+                      title={`Filter by artist ${selectedArtwork.artist_name}`}
+                      style={{ 
+                        color: '#0070f3', 
+                        textDecoration: 'underline', 
+                        cursor: 'pointer', 
+                        fontWeight: 'bold' 
+                      }}
+                    >
+                      {selectedArtwork.artist_name}
+                    </span>
+                  </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {isAdmin && (
