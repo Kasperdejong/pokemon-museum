@@ -249,7 +249,7 @@ export default function Admin() {
               <p style={{ color: '#fff', textAlign: 'center', padding: '40px', fontSize: '18px' }}>Loading queue...</p>
             ) : pendingList.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', background: 'rgba(255, 255, 255, 0.96)', borderRadius: '12px', color: '#111' }}>
-                <h2 style={{ margin: '0 0 8px 0', color: '#000' }}>Queue is all clear! 🎉</h2>
+                <h2 style={{ margin: '0 0 8px 0', color: '#000' }}>Queue is all clear!</h2>
                 <p style={{ color: '#444' }}>No drawings are currently waiting for review.</p>
               </div>
             ) : (
