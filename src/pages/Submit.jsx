@@ -124,6 +124,84 @@ export default function Submit() {
       .slice(0, 6);
   }, [query, selectedPokemon]);
 
+  // Helper: Finds the bounding box of non-transparent pixels and crops away empty space
+async function autoTrimTransparentImage(file) {
+  // Only process PNG or WebP images that support transparency
+  if (!['image/png', 'image/webp'].includes(file.type)) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+
+      try {
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+
+        let minX = canvas.width;
+        let minY = canvas.height;
+        let maxX = 0;
+        let maxY = 0;
+        let foundPixel = false;
+
+        // Scan pixels for non-transparent content (alpha > 15)
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const alpha = data[(y * canvas.width + x) * 4 + 3];
+            if (alpha > 15) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+              foundPixel = true;
+            }
+          }
+        }
+
+        // If the image is fully opaque (like a solid background) or empty, keep original
+        if (!foundPixel || (minX === 0 && minY === 0 && maxX === canvas.width - 1 && maxY === canvas.height - 1)) {
+          resolve(file);
+          return;
+        }
+
+        // Add a 3% breathing margin so it doesn't touch the edge
+        const pad = Math.round(Math.max(canvas.width, canvas.height) * 0.03);
+        const cropX = Math.max(0, minX - pad);
+        const cropY = Math.max(0, minY - pad);
+        const cropW = Math.min(canvas.width - cropX, (maxX - minX) + pad * 2);
+        const cropH = Math.min(canvas.height - cropY, (maxY - minY) + pad * 2);
+
+        const trimmedCanvas = document.createElement('canvas');
+        trimmedCanvas.width = cropW;
+        trimmedCanvas.height = cropH;
+        const trimmedCtx = trimmedCanvas.getContext('2d');
+        trimmedCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        trimmedCanvas.toBlob((blob) => {
+          if (blob) {
+            const trimmedFile = new File([blob], file.name, { type: 'image/png' });
+            resolve(trimmedFile);
+          } else {
+            resolve(file);
+          }
+        }, 'image/png');
+      } catch (err) {
+        // Fallback to original if canvas reading fails
+        console.warn('Auto-trim skipped:', err);
+        resolve(file);
+      }
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
   async function handleSubmit(e) {
     e.preventDefault();
 
@@ -131,6 +209,20 @@ export default function Submit() {
       alert(`Please wait ${cooldownRemaining} more minute(s) before submitting another drawing.`);
       return;
     }
+
+    // 1. Auto-trim empty transparent edges so the drawing is big and centered!
+      setStatusMsg('Auto-framing drawing...');
+      const trimmedFile = await autoTrimTransparentImage(file);
+
+      // 2. Compress image to WebP
+      setStatusMsg('Compressing image to WebP...');
+      const options = {
+        maxSizeMB: 0.25,
+        maxWidthOrHeight: 1200,
+        useWebWorker: true,
+        fileType: 'image/webp'
+      };
+      const compressedBlob = await imageCompression(trimmedFile, options);
 
     const queryTrimmed = query.trim();
     const queryNum = parsePokeId(queryTrimmed);

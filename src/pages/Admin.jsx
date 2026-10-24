@@ -5,7 +5,9 @@ export default function Admin() {
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [pendingList, setPendingList] = useState([]);
+  const [activeTab, setActiveTab] = useState('pokemon'); // 'pokemon' or 'fanart'
+  const [pendingPokemon, setPendingPokemon] = useState([]);
+  const [pendingFanart, setPendingFanart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [inspectArtwork, setInspectArtwork] = useState(null);
   const [streamerMode, setStreamerMode] = useState(true);
@@ -13,7 +15,7 @@ export default function Admin() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) fetchPending();
+      if (session) fetchAllPending();
       else setLoading(false);
     });
   }, []);
@@ -26,44 +28,66 @@ export default function Admin() {
     } else {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
-      fetchPending();
+      fetchAllPending();
     }
   }
 
-  async function fetchPending() {
+  async function fetchAllPending() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('submissions')
-      .select('*')
-      .eq('is_approved', false)
-      .order('created_at', { ascending: false });
+    try {
+      // 1. Fetch pending Pokémon submissions
+      const { data: pokeData } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('is_approved', false)
+        .order('created_at', { ascending: false });
 
-    if (error) console.error(error);
-    else setPendingList(data || []);
-    setLoading(false);
+      setPendingPokemon(pokeData || []);
+
+      // 2. Fetch pending Fanart submissions
+      const { data: fanartData } = await supabase
+        .from('fanart_submissions')
+        .select('*')
+        .eq('is_approved', false)
+        .order('created_at', { ascending: false });
+
+      setPendingFanart(fanartData || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const isPokemonTab = activeTab === 'pokemon';
+  const currentList = isPokemonTab ? pendingPokemon : pendingFanart;
+  const currentTable = isPokemonTab ? 'submissions' : 'fanart_submissions';
 
   async function approve(item, isFeatured = false) {
     try {
       const { error } = await supabase
-        .from('submissions')
+        .from(currentTable)
         .update({ is_approved: true, is_featured: isFeatured })
         .eq('id', item.id);
 
       if (error) throw error;
-      setPendingList((prev) => prev.filter((d) => d.id !== item.id));
+
+      if (isPokemonTab) {
+        setPendingPokemon((prev) => prev.filter((d) => d.id !== item.id));
+      } else {
+        setPendingFanart((prev) => prev.filter((d) => d.id !== item.id));
+      }
+
       if (inspectArtwork?.id === item.id) setInspectArtwork(null);
     } catch (err) {
       alert('Approval failed: ' + err.message);
     }
   }
 
-  // bypassConfirm = true when using keyboard shortcut 'X' in viewer for speed!
   async function reject(item, bypassConfirm = false) {
     if (!bypassConfirm) {
-      const confirmed = window.confirm(
-        `Reject and delete "${item.pokemon_name}" by "${item.artist_name}"?`
-      );
+      const title = item.pokemon_name || item.title;
+      const confirmed = window.confirm(`Reject and delete "${title}" by "${item.artist_name}"?`);
       if (!confirmed) return;
     }
 
@@ -75,30 +99,21 @@ export default function Admin() {
         await supabase.storage.from('drawings').remove([fileName]);
       }
 
-      const { error } = await supabase.from('submissions').delete().eq('id', item.id);
+      const { error } = await supabase.from(currentTable).delete().eq('id', item.id);
       if (error) throw error;
 
-      setPendingList((prev) => prev.filter((d) => d.id !== item.id));
+      if (isPokemonTab) {
+        setPendingPokemon((prev) => prev.filter((d) => d.id !== item.id));
+      } else {
+        setPendingFanart((prev) => prev.filter((d) => d.id !== item.id));
+      }
+
       if (inspectArtwork?.id === item.id) setInspectArtwork(null);
     } catch (err) {
       alert('Delete failed: ' + err.message);
     }
   }
 
-  async function approveAllVisible() {
-    if (!window.confirm(`Approve all ${pendingList.length} visible drawings?`)) return;
-    try {
-      const ids = pendingList.map((i) => i.id);
-      const { error } = await supabase.from('submissions').update({ is_approved: true }).in('id', ids);
-      if (error) throw error;
-      setPendingList([]);
-      setInspectArtwork(null);
-    } catch (err) {
-      alert('Batch approve failed: ' + err.message);
-    }
-  }
-
-  // ⌨️ Keyboard Shortcuts Listener (No prompt when pressing X!)
   const handleKeyDown = useCallback((e) => {
     if (!inspectArtwork) return;
     if (e.key === 'a' || e.key === 'A') {
@@ -106,11 +121,11 @@ export default function Admin() {
     } else if (e.key === 'f' || e.key === 'F') {
       approve(inspectArtwork, true);
     } else if (e.key === 'x' || e.key === 'X') {
-      reject(inspectArtwork, true); // Instant reject without prompt
+      reject(inspectArtwork, true);
     } else if (e.key === 'Escape') {
       setInspectArtwork(null);
     }
-  }, [inspectArtwork]);
+  }, [inspectArtwork, isPokemonTab]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -141,7 +156,7 @@ export default function Admin() {
             boxShadow: '0 12px 35px rgba(0,0,0,0.3)',
             color: '#111'
           }}>
-            <h2 style={{ marginTop: 0, color: '#000', fontSize: '22px' }}>Admin Login 🛡️</h2>
+            <h2 style={{ marginTop: 0, color: '#000', fontSize: '22px' }}>Admin Login</h2>
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <input 
                 type="email" 
@@ -184,10 +199,10 @@ export default function Admin() {
             }}>
               <div>
                 <h1 style={{ margin: 0, fontSize: '24px', color: '#000', fontWeight: 'bold' }}>
-                  Moderation Queue 🛡️
+                  Moderation Queue
                 </h1>
                 <p style={{ margin: '4px 0 0 0', color: '#444', fontSize: '14px' }}>
-                  Hotkeys in enlarged viewer: <strong>[A]</strong> Approve &bull; <strong>[F]</strong> Star &bull; <strong>[X]</strong> Instant Reject
+                  Hotkeys in enlarged viewer: <strong>[A]</strong> Approve &bull; <strong>[F]</strong> Star &bull; <strong>[X]</strong> Reject
                 </p>
               </div>
 
@@ -211,50 +226,57 @@ export default function Admin() {
                     onChange={(e) => setStreamerMode(e.target.checked)}
                     style={{ cursor: 'pointer' }}
                   />
-                  🛡️ Streamer Safe Mode (Blur Art)
+                  Streamer Safe Mode (Blur Art)
                 </label>
-
-                {pendingList.length > 1 && (
-                  <button
-                    onClick={approveAllVisible}
-                    style={{
-                      background: '#15803d',
-                      color: '#fff',
-                      border: 'none',
-                      padding: '8px 14px',
-                      borderRadius: '8px',
-                      fontWeight: 'bold',
-                      fontSize: '13px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    ⚡ Approve All ({pendingList.length})
-                  </button>
-                )}
-
-                <div style={{
-                  background: pendingList.length > 0 ? '#fff3e0' : '#e8f5e9',
-                  color: pendingList.length > 0 ? '#bf360c' : '#1b5e20',
-                  padding: '8px 14px',
-                  borderRadius: '20px',
-                  fontWeight: 'bold',
-                  fontSize: '13px'
-                }}>
-                  {pendingList.length} Pending
-                </div>
               </div>
             </header>
 
+            {/* Queue Switcher Tabs */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+              <button
+                onClick={() => setActiveTab('pokemon')}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: activeTab === 'pokemon' ? '#ff9800' : '#ffffff',
+                  color: activeTab === 'pokemon' ? '#000' : '#444',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Pokémon Drawings ({pendingPokemon.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('fanart')}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: activeTab === 'fanart' ? '#4f46e5' : '#ffffff',
+                  color: activeTab === 'fanart' ? '#fff' : '#444',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Fanart Submissions ({pendingFanart.length})
+              </button>
+            </div>
+
             {loading ? (
               <p style={{ color: '#fff', textAlign: 'center', padding: '40px', fontSize: '18px' }}>Loading queue...</p>
-            ) : pendingList.length === 0 ? (
+            ) : currentList.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px', background: 'rgba(255, 255, 255, 0.96)', borderRadius: '12px', color: '#111' }}>
-                <h2 style={{ margin: '0 0 8px 0', color: '#000' }}>Queue is all clear!</h2>
-                <p style={{ color: '#444' }}>No drawings are currently waiting for review.</p>
+                <h2 style={{ margin: '0 0 8px 0', color: '#000' }}>Queue is clear!</h2>
+                <p style={{ color: '#444' }}>No items waiting for review in this category.</p>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
-                {pendingList.map((item) => (
+                {currentList.map((item) => (
                   <div
                     key={item.id}
                     style={{
@@ -284,7 +306,7 @@ export default function Admin() {
                     >
                       <img 
                         src={item.image_url} 
-                        alt={item.pokemon_name} 
+                        alt="" 
                         style={{
                           maxWidth: '100%',
                           maxHeight: '100%',
@@ -304,40 +326,51 @@ export default function Admin() {
                           fontWeight: 'bold',
                           pointerEvents: 'none'
                         }}>
-                        Click to Reveal
+                          Click to Reveal
                         </div>
                       )}
                     </div>
 
                     <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                       <div>
-                        <span style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Pokémon</span>
-                        <div style={{ fontSize: '17px', fontWeight: 'bold', color: '#000' }}>{item.pokemon_name}</div>
+                        <span style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                          {isPokemonTab ? 'Pokémon' : 'Title'}
+                        </span>
+                        <div style={{ fontSize: '17px', fontWeight: 'bold', color: '#000' }}>
+                          {item.pokemon_name || item.title}
+                        </div>
                       </div>
                       <div>
                         <span style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Artist</span>
                         <div style={{ fontSize: '14px', color: '#222', fontWeight: '600' }}>{item.artist_name}</div>
                       </div>
 
+                      {item.description && (
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#777', textTransform: 'uppercase', fontWeight: 'bold' }}>Description</span>
+                          <div style={{ fontSize: '13px', color: '#444' }}>{item.description}</div>
+                        </div>
+                      )}
+
                       <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px' }}>
                         <button
                           onClick={() => approve(item, false)}
                           style={{ flex: 1, background: '#22c55e', color: '#000', border: 'none', padding: '9px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
                         >
-                          Approve ✅
+                          Approve
                         </button>
                         <button
                           onClick={() => approve(item, true)}
-                          title="Star as Staff Pick!"
+                          title="Star as Featured!"
                           style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '9px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
                         >
-                          ⭐
+                          ★
                         </button>
                         <button
                           onClick={() => reject(item, false)}
                           style={{ flex: 1, background: '#ef4444', color: '#fff', border: 'none', padding: '9px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
                         >
-                          Reject ❌
+                          Reject
                         </button>
                       </div>
                     </div>
@@ -346,7 +379,7 @@ export default function Admin() {
               </div>
             )}
 
-            {/* Lightbox Viewer (Press A, F, or X here for instant moderation) */}
+            {/* Lightbox Modal */}
             {inspectArtwork && (
               <div 
                 onClick={() => setInspectArtwork(null)} 
@@ -386,8 +419,12 @@ export default function Admin() {
 
                   <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', flexWrap: 'wrap', gap: '10px' }}>
                     <div>
-                      <h2 style={{ margin: 0, color: '#000', fontSize: '18px' }}>{inspectArtwork.pokemon_name}</h2>
-                      <p style={{ margin: '2px 0 0 0', color: '#444', fontSize: '13px' }}>Artist: <strong>{inspectArtwork.artist_name}</strong></p>
+                      <h2 style={{ margin: 0, color: '#000', fontSize: '18px' }}>
+                        {inspectArtwork.pokemon_name || inspectArtwork.title}
+                      </h2>
+                      <p style={{ margin: '2px 0 0 0', color: '#444', fontSize: '13px' }}>
+                        Artist: <strong>{inspectArtwork.artist_name}</strong>
+                      </p>
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px' }}>
@@ -395,19 +432,19 @@ export default function Admin() {
                         onClick={() => approve(inspectArtwork, false)}
                         style={{ background: '#22c55e', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
-                        Approve [A] ✅
+                        Approve [A]
                       </button>
                       <button
                         onClick={() => approve(inspectArtwork, true)}
                         style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
-                        ⭐ Star [F]
+                        Star [F]
                       </button>
                       <button
                         onClick={() => reject(inspectArtwork, true)}
                         style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
-                        Reject [X] ❌
+                        Reject [X]
                       </button>
                       <button
                         onClick={() => setInspectArtwork(null)}

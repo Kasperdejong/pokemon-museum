@@ -32,3 +32,69 @@ textarea {
 input::placeholder {
   color: #666 !important;
 }
+
+/* --- Pokémon Type Border Waves & Responsive Museum Grid --- */
+
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes rotateBorderWave {
+  0% {
+    --border-angle: 0deg;
+  }
+
+  100% {
+    --border-angle: 360deg;
+  }
+}
+
+.type-animated-card {
+  --border-angle: 0deg;
+  position: relative;
+  background: conic-gradient(from var(--border-angle),
+      var(--type-col-1),
+      var(--type-col-2),
+      var(--type-col-1));
+  animation: rotateBorderWave 4s linear infinite;
+  border-radius: 12px;
+  padding: 3.5px;
+  /* Border thickness */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.type-animated-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 16px var(--type-col-1);
+}
+
+.type-animated-card-inner {
+  background: #ffffff;
+  border-radius: 9px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Responsive grid for 5 to 6 columns on big screens */
+.museum-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 20px;
+}
+
+@media (min-width: 1400px) {
+  .museum-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (min-width: 1650px) {
+  .museum-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}

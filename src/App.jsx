@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import Gallery from './pages/Gallery';
+import Fanart from './pages/Fanart';
 import Submit from './pages/Submit';
 import Admin from './pages/Admin';
 import MySubmissions from './pages/MySubmissions';
@@ -11,7 +12,6 @@ function NavigationBar({ session, setSession }) {
   const [artCount, setArtCount] = useState(null);
 
   useEffect(() => {
-    // Fetch live global count of approved artwork
     supabase
       .from('submissions')
       .select('*', { count: 'exact', head: true })
@@ -29,55 +29,109 @@ function NavigationBar({ session, setSession }) {
 
   return (
     <nav style={{
-      padding: '14px 24px',
+      paddingTop: '8px',
+      paddingBottom: '6px', /* Reduced bottom padding */
+      paddingLeft: '20px',
+      paddingRight: '20px',
       background: '#222',
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+      flexWrap: 'wrap',
+      rowGap: '8px',
+      columnGap: '16px',
+      boxShadow: '0 3px 10px rgba(0,0,0,0.2)'
     }}>
-      <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-        <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: '18px' }}>
+      {/* Left side links */}
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <img 
+            src="/favicon.ico" 
+            alt="Favicon" 
+            style={{ width: '30px', height: '30px', objectFit: 'contain' }} 
+            onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+          />
           Pokémon Museum
         </Link>
-        <Link to="/kavhan" style={{ color: '#ff9800', textDecoration: 'none', fontWeight: 'bold', fontSize: '15px' }}>
+
+        <Link to="/kavhan" style={{ color: '#ff9800', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <img 
+            src="/kavhan.png" 
+            alt="Kavhan" 
+            style={{ width: '30px', height: '30px', objectFit: 'contain' }} 
+            onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+          />
           Kavhan's Drawings
         </Link>
-        <Link to="/submit" style={{ color: '#ddd', textDecoration: 'none', fontSize: '15px' }}>
+
+        <Link to="/submit" style={{ color: '#ddd', textDecoration: 'none', fontSize: '14px' }}>
           Submit Art
         </Link>
-        <Link to="/my-submissions" style={{ color: '#ffcb05', textDecoration: 'none', fontWeight: 'bold', fontSize: '15px' }}>
+
+        <Link to="/my-submissions" style={{ color: '#ffcb05', textDecoration: 'none', fontWeight: 'bold', fontSize: '14px' }}>
           My Submissions
         </Link>
       </div>
 
-      <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+      {/* Right side: Fanart with Aegislash -> Scolipede -> Counter -> Admin */}
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <Link 
+          to="/fanart" 
+          style={{ 
+            color: '#e0e7ff', 
+            textDecoration: 'none', 
+            fontWeight: 'bold', 
+            fontSize: '14px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '7px'
+          }}
+        >
+          <img 
+            src="/Aegislash_sword.png" 
+            alt="Fanart" 
+            style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+            onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+          />
+          Fanart
+        </Link>
+
         {artCount !== null && (
-          <span style={{
-            background: 'rgba(255, 255, 255, 0.12)',
-            color: '#ffcb05',
-            padding: '5px 12px',
-            borderRadius: '16px',
-            fontSize: '13px',
-            fontWeight: 'bold',
-            border: '1px solid rgba(255, 203, 5, 0.3)'
-          }}>
-            🎨 {artCount} {artCount === 1 ? 'Total Drawing' : 'Total Drawings'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <img 
+              src="/Scolipede.png" 
+              alt="Scolipede" 
+              style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+              onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+            />
+            <span style={{
+              background: 'rgba(255, 255, 255, 0.12)',
+              color: '#ffcb05',
+              padding: '4px 10px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              border: '1.5px solid rgba(255, 203, 5, 0.35)',
+              whiteSpace: 'nowrap'
+            }}>
+              {artCount} Total {artCount === 1 ? 'Drawing' : 'Drawings'}
+            </span>
+          </div>
         )}
 
         {session && (
-          <>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <Link 
               to="/admin" 
               style={{
                 background: '#2e7d32',
                 color: '#fff',
                 textDecoration: 'none',
-                padding: '6px 12px',
+                padding: '5px 10px',
                 borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: 'bold'
+                fontSize: '12px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap'
               }}
             >
               Admin Dashboard
@@ -86,17 +140,18 @@ function NavigationBar({ session, setSession }) {
               onClick={handleLogout}
               style={{
                 background: 'transparent',
-                border: '1px solid #666',
-                color: '#ccc',
-                padding: '5px 10px',
+                border: '1px solid #777',
+                color: '#eee',
+                padding: '4px 8px',
                 borderRadius: '4px',
                 fontSize: '12px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
               Log Out
             </button>
-          </>
+          </div>
         )}
       </div>
     </nav>
@@ -128,6 +183,7 @@ export default function App() {
             <Route path="/" element={<Gallery key="museum" />} />
             <Route path="/kavhan" element={<Gallery key="kavhan" instructorMode={true} />} />
             <Route path="/artist/:artistParam" element={<Gallery key="artist" />} />
+            <Route path="/fanart" element={<Fanart />} />
             <Route path="/submit" element={<Submit />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/my-submissions" element={<MySubmissions />} />
