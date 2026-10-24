@@ -35,7 +35,6 @@ export default function Admin() {
   async function fetchAllPending() {
     setLoading(true);
     try {
-      // 1. Fetch pending Pokémon submissions
       const { data: pokeData } = await supabase
         .from('submissions')
         .select('*')
@@ -44,7 +43,6 @@ export default function Admin() {
 
       setPendingPokemon(pokeData || []);
 
-      // 2. Fetch pending Fanart submissions
       const { data: fanartData } = await supabase
         .from('fanart_submissions')
         .select('*')
@@ -202,7 +200,7 @@ export default function Admin() {
                   Moderation Queue
                 </h1>
                 <p style={{ margin: '4px 0 0 0', color: '#444', fontSize: '14px' }}>
-                  Hotkeys in enlarged viewer: <strong>[A]</strong> Approve &bull; <strong>[F]</strong> Star &bull; <strong>[X]</strong> Reject
+                  Hotkeys in enlarged viewer: <strong>[A]</strong> Approve &bull; <strong style={{ color: '#d97706' }}>[F] ★ Star Featured</strong> &bull; <strong>[X]</strong> Reject
                 </p>
               </div>
 
@@ -258,8 +256,8 @@ export default function Admin() {
                   fontSize: '14px',
                   cursor: 'pointer',
                   border: 'none',
-                  background: activeTab === 'fanart' ? '#4f46e5' : '#ffffff',
-                  color: activeTab === 'fanart' ? '#fff' : '#444',
+                  background: activeTab === 'fanart' ? '#ff9800' : '#ffffff',
+                  color: activeTab === 'fanart' ? '#000' : '#444',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
               >
@@ -359,13 +357,27 @@ export default function Admin() {
                         >
                           Approve
                         </button>
+
+                        {/* Yellow Star Action Button */}
                         <button
                           onClick={() => approve(item, true)}
-                          title="Star as Featured!"
-                          style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '9px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+                          title="Approve & Feature with Yellow Star!"
+                          style={{
+                            background: '#18181b',
+                            color: '#eab308',
+                            border: '1.5px solid #eab308',
+                            padding: '9px 13px',
+                            borderRadius: '6px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            fontSize: '17px',
+                            lineHeight: 1,
+                            boxShadow: '0 0 10px rgba(234, 179, 8, 0.35)'
+                          }}
                         >
                           ★
                         </button>
+
                         <button
                           onClick={() => reject(item, false)}
                           style={{ flex: 1, background: '#ef4444', color: '#fff', border: 'none', padding: '9px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
@@ -427,25 +439,41 @@ export default function Admin() {
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                       <button
                         onClick={() => approve(inspectArtwork, false)}
                         style={{ background: '#22c55e', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
                         Approve [A]
                       </button>
+
+                      {/* Prominent Yellow Star in Lightbox */}
                       <button
                         onClick={() => approve(inspectArtwork, true)}
-                        style={{ background: '#f59e0b', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                        style={{
+                          background: '#18181b',
+                          color: '#eab308',
+                          border: '1.5px solid #eab308',
+                          padding: '8px 16px',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 0 10px rgba(234, 179, 8, 0.4)'
+                        }}
                       >
-                        Star [F]
+                        <span style={{ fontSize: '18px', lineHeight: 1 }}>★</span> Star [F]
                       </button>
+
                       <button
                         onClick={() => reject(inspectArtwork, true)}
                         style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
                       >
                         Reject [X]
                       </button>
+
                       <button
                         onClick={() => setInspectArtwork(null)}
                         style={{ background: '#eee', color: '#111', border: '1px solid #ccc', padding: '8px 14px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}

@@ -51,7 +51,7 @@ export default function Fanart() {
   // Search, Filter & Pagination states
   const [titleSearch, setTitleSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
-  const [sortBy, setSortBy] = useState('newest');
+  const [sortBy, setSortBy] = useState('featured');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
 
@@ -78,7 +78,6 @@ export default function Fanart() {
     fetchFanart();
   }, []);
 
-  // Reset to first page whenever search filters or page size change
   useEffect(() => {
     setCurrentPage(1);
   }, [titleSearch, artistSearch, sortBy, pageSize]);
@@ -98,6 +97,23 @@ export default function Fanart() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Toggle Featured status (Admin only)
+  async function toggleFeature(item, e) {
+    if (e) e.stopPropagation();
+    const updated = !item.is_featured;
+    try {
+      const { error } = await supabase
+        .from('fanart_submissions')
+        .update({ is_featured: updated })
+        .eq('id', item.id);
+
+      if (error) throw error;
+      setArtList((prev) => prev.map((d) => d.id === item.id ? { ...d, is_featured: updated } : d));
+    } catch (err) {
+      alert('Failed to update featured status: ' + err.message);
     }
   }
 
@@ -139,7 +155,6 @@ export default function Fanart() {
     setArtistSearch('');
   }
 
-  // Filter & Sorting logic
   const filteredArt = useMemo(() => {
     const tQuery = titleSearch.toLowerCase().trim();
     const aQuery = artistSearch.toLowerCase().trim();
@@ -156,6 +171,11 @@ export default function Fanart() {
         return matchesTitle && matchesArtist;
       })
       .sort((a, b) => {
+        if (sortBy === 'featured') {
+          const featDiff = (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
+          if (featDiff !== 0) return featDiff;
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
         if (sortBy === 'newest') return new Date(b.created_at) - new Date(a.created_at);
         if (sortBy === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
         if (sortBy === 'title_az') return (a.title || '').localeCompare(b.title || '');
@@ -164,7 +184,6 @@ export default function Fanart() {
       });
   }, [artList, titleSearch, artistSearch, sortBy]);
 
-  // Pagination calculation
   const totalPages = Math.ceil(filteredArt.length / pageSize) || 1;
   const paginatedArt = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
@@ -254,6 +273,7 @@ export default function Fanart() {
         description: cleanDesc,
         image_url: publicUrl,
         is_approved: false,
+        is_featured: false,
         delete_token: deleteToken,
         device_id: deviceId
       }]);
@@ -382,6 +402,7 @@ export default function Fanart() {
             onChange={(e) => setSortBy(e.target.value)}
             style={{ padding: '9px 14px', borderRadius: '6px', border: '1.5px solid #ccc', cursor: 'pointer', fontWeight: '500' }}
           >
+            <option value="featured">⭐ Featured First</option>
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
             <option value="title_az">Title (A–Z)</option>
@@ -470,17 +491,37 @@ export default function Fanart() {
                   style={{
                     background: '#ffffff',
                     borderRadius: '10px',
-                    border: '1px solid #ccc',
+                    border: item.is_featured ? '2.5px solid #f59e0b' : '1px solid #ccc',
+                    boxShadow: item.is_featured ? '0 0 16px rgba(245, 158, 11, 0.45)' : '0 4px 12px rgba(0,0,0,0.12)',
                     overflow: 'hidden',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                    position: 'relative',
                     transition: 'transform 0.15s ease'
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
                 >
+                  {/* Featured Badge */}
+                  {item.is_featured && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      left: '8px',
+                      background: '#f59e0b',
+                      color: '#000',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontWeight: 'bold',
+                      fontSize: '11px',
+                      zIndex: 2,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.25)'
+                    }}>
+                      ⭐ Featured
+                    </div>
+                  )}
+
                   <div style={{ 
                     height: '220px', 
                     background: '#ffffff', 
@@ -535,8 +576,25 @@ export default function Fanart() {
                       )}
                     </div>
 
+                    {/* Admin Actions: Yellow Star & Delete */}
                     {isAdmin && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          onClick={(e) => toggleFeature(item, e)}
+                          title={item.is_featured ? 'Remove Featured' : 'Feature Artwork'}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: '20px',
+                            cursor: 'pointer',
+                            color: '#eab308',
+                            lineHeight: 1,
+                            textShadow: '0 0 4px rgba(234, 179, 8, 0.4)'
+                          }}
+                        >
+                          {item.is_featured ? '★' : '☆'}
+                        </button>
+
                         <button
                           onClick={(e) => handleDelete(item, e)}
                           style={{
@@ -544,7 +602,7 @@ export default function Fanart() {
                             color: '#b91c1c',
                             border: '1px solid #f87171',
                             borderRadius: '4px',
-                            padding: '4px 8px',
+                            padding: '3px 7px',
                             fontSize: '11px',
                             cursor: 'pointer',
                             fontWeight: 'bold'
@@ -716,14 +774,31 @@ export default function Fanart() {
                     <p style={{ margin: '4px 0 0 0', color: '#555', fontSize: '13px' }}>{selectedArtwork.description}</p>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   {isAdmin && (
-                    <button
-                      onClick={(e) => handleDelete(selectedArtwork, e)}
-                      style={{ padding: '8px 14px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #f87171', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      Delete 🗑️
-                    </button>
+                    <>
+                      <button
+                        onClick={(e) => toggleFeature(selectedArtwork, e)}
+                        title={selectedArtwork.is_featured ? 'Remove Featured' : 'Feature Artwork'}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          fontSize: '22px',
+                          cursor: 'pointer',
+                          color: '#eab308',
+                          lineHeight: 1
+                        }}
+                      >
+                        {selectedArtwork.is_featured ? '★' : '☆'}
+                      </button>
+
+                      <button
+                        onClick={(e) => handleDelete(selectedArtwork, e)}
+                        style={{ padding: '8px 14px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #f87171', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        Delete 🗑️
+                      </button>
+                    </>
                   )}
                   <button onClick={() => setSelectedArtwork(null)} style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>
                     Close
