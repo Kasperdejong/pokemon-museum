@@ -704,52 +704,180 @@ export default function Gallery({ instructorMode = false }) {
           </div>
         )}
 
-        {/* Lightbox Modal */}
-        {selectedArtwork && (
-          <div onClick={() => setSelectedArtwork(null)} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '10px', maxWidth: '90vw', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ maxHeight: '75vh', background: '#111', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <img src={selectedArtwork.image_url} alt="" style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }} />
-              </div>
-              <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <div>
-                  <h2 style={{ margin: 0 }}>{selectedArtwork.pokemon_name}</h2>
-                  <p style={{ margin: '4px 0 0 0' }}>
-                    Drawn by:{' '}
-                    <span 
-                      onClick={() => handleArtistClick(selectedArtwork.artist_name)}
-                      title={`Filter by artist ${selectedArtwork.artist_name}`}
-                      style={{ 
-                        color: '#0070f3', 
-                        textDecoration: 'underline', 
-                        cursor: 'pointer', 
-                        fontWeight: 'bold' 
-                      }}
-                    >
-                      {selectedArtwork.artist_name}
-                    </span>
-                    <span style={{ color: '#666', marginLeft: '10px', fontSize: '13px' }}>
-                      &bull; {formatDate(selectedArtwork.created_at)}
-                    </span>
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {isAdmin && (
-                    <button
-                      onClick={(e) => handleDelete(selectedArtwork, e)}
-                      style={{ padding: '8px 14px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #f87171', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      Delete
-                    </button>
-                  )}
-                  <button onClick={() => setSelectedArtwork(null)} style={{ padding: '8px 16px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>
-                    Close
-                  </button>
+ {/* Lightbox Modal (100% Self-Contained) */}
+        {selectedArtwork && (() => {
+          // Find Pokémon types safely
+          const pData = pokedexByName.get(selectedArtwork.pokemon_name?.toLowerCase().trim());
+          const types = pData?.types || ['Normal'];
+          const col1 = TYPE_COLORS[types[0]] || '#7AC74C';
+          const col2 = types[1] ? (TYPE_COLORS[types[1]] || col1) : col1;
+
+          return (
+            <div 
+              onClick={() => setSelectedArtwork(null)} 
+              style={{ 
+                position: 'fixed', 
+                inset: 0, 
+                backgroundColor: 'rgba(0, 0, 0, 0.88)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                zIndex: 9999, 
+                padding: '20px' 
+              }}
+            >
+              {/* Outer Glowing Border Frame using Pokémon Type Colors */}
+              <div 
+                onClick={(e) => e.stopPropagation()} 
+                style={{
+                  background: `linear-gradient(135deg, ${col1}, ${col2})`,
+                  padding: '3px',
+                  borderRadius: '11.5px',
+                  boxShadow: `0 0 30px rgba(0,0,0,0.8), 0 0 20px ${col1}88`,
+                  maxWidth: '90vw',
+                  maxHeight: '92vh',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden'
+                }}
+              >
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  maxHeight: '90vh'
+                }}>
+                  {/* Image Viewport */}
+                  <div style={{ maxHeight: '72vh', background: '#0a0a0a', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px' }}>
+                    <img 
+                      src={selectedArtwork.image_url} 
+                      alt={selectedArtwork.pokemon_name} 
+                      style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} 
+                    />
+                  </div>
+
+                  {/* Info Bar */}
+                  <div style={{ 
+                    padding: '16px 20px', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    gap: '12px', 
+                    flexWrap: 'wrap',
+                    background: '#ffffff',
+                    color: '#111'
+                  }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h2 style={{ margin: 0, fontSize: '20px', color: '#000', fontWeight: 'bold' }}>
+                          {selectedArtwork.pokemon_name}
+                        </h2>
+                        {pData?.numericId && (
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#777' }}>
+                            #{pData.numericId}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#444' }}>
+                        Drawn by:{' '}
+                        <span 
+                          onClick={() => handleArtistClick(selectedArtwork.artist_name)}
+                          title={`Filter by artist ${selectedArtwork.artist_name}`}
+                          style={{ 
+                            color: '#0070f3', 
+                            textDecoration: 'underline', 
+                            cursor: 'pointer', 
+                            fontWeight: 'bold' 
+                          }}
+                        >
+                          {selectedArtwork.artist_name}
+                        </span>
+                        <span style={{ marginLeft: '10px', fontSize: '12px', color: '#777' }}>
+                          &bull; {formatDate(selectedArtwork.created_at)}
+                        </span>
+                      </p>
+
+                      {/* Pokémon Type Badges */}
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                        {types.map((t) => (
+                          <span 
+                            key={t} 
+                            style={{ 
+                              background: TYPE_COLORS[t] || '#666', 
+                              color: '#fff', 
+                              fontSize: '10px', 
+                              fontWeight: 'bold', 
+                              padding: '2px 8px', 
+                              borderRadius: '4px',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Actions: Yellow Star & Close */}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {isAdmin && (
+                        <>
+                          <button
+                            onClick={(e) => toggleFeature(selectedArtwork, e)}
+                            title={selectedArtwork.is_featured ? 'Remove Featured' : 'Make Featured'}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              fontSize: '22px',
+                              cursor: 'pointer',
+                              color: '#eab308',
+                              lineHeight: 1
+                            }}
+                          >
+                            {selectedArtwork.is_featured ? '★' : '☆'}
+                          </button>
+
+                          <button
+                            onClick={(e) => handleDelete(selectedArtwork, e)}
+                            style={{ 
+                              padding: '8px 14px', 
+                              background: '#fee2e2', 
+                              color: '#b91c1c', 
+                              border: '1px solid #f87171', 
+                              borderRadius: '4px', 
+                              cursor: 'pointer', 
+                              fontWeight: 'bold' 
+                            }}
+                          >
+                            Delete 🗑️
+                          </button>
+                        </>
+                      )}
+
+                      <button 
+                        onClick={() => setSelectedArtwork(null)} 
+                        style={{ 
+                          padding: '8px 16px', 
+                          cursor: 'pointer', 
+                          borderRadius: '6px', 
+                          border: '1px solid #ccc', 
+                          background: '#f5f5f5', 
+                          color: '#111', 
+                          fontWeight: 'bold' 
+                        }}
+                      >
+                        Close ✕
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
     </div>
