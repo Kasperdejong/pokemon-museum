@@ -1,85 +1,109 @@
 import { useEffect, useState, useRef } from 'react';
 
-// Caches auto-trimmed URLs in memory so it only processes each image once
-const trimmedCache = new Map();
+const fitCache = new Map();
 
 export default function AutoFitImage({ src, alt, style = {}, onMouseEnter, onMouseLeave }) {
-  const [displaySrc, setDisplaySrc] = useState(trimmedCache.get(src) || src);
+  const [fit, setFit] = useState(
+    fitCache.get(src) || { scale: 1, origin: '50% 50%', shiftX: 0, shiftY: 0 }
+  );
+  const [hovered, setHovered] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
     isMounted.current = true;
-    if (trimmedCache.has(src)) {
-      setDisplaySrc(trimmedCache.get(src));
+    if (fitCache.has(src)) {
+      setFit(fitCache.get(src));
       return;
     }
 
     const img = new Image();
-    img.crossOrigin = 'anonymous'; // Allows reading canvas data from Supabase storage
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
+        const size = 100;
         const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
+        canvas.width = size;
+        canvas.height = size;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, size, size);
 
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imgData.data;
+        const data = ctx.getImageData(0, 0, size, size).data;
+        let minX = size, minY = size, maxX = 0, maxY = 0;
+        let found = false;
 
-        let minX = canvas.width;
-        let minY = canvas.height;
-        let maxX = 0;
-        let maxY = 0;
-        let foundPixel = false;
-
-        // Scan pixels for non-transparent content
-        for (let y = 0; y < canvas.height; y++) {
-          for (let x = 0; x < canvas.width; x++) {
-            const alpha = data[(y * canvas.width + x) * 4 + 3];
-            if (alpha > 15) {
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            if (data[(y * size + x) * 4 + 3] > 15) {
               if (x < minX) minX = x;
               if (x > maxX) maxX = x;
               if (y < minY) minY = y;
               if (y > maxY) maxY = y;
-              foundPixel = true;
+              found = true;
             }
           }
         }
 
-        // If no transparency or already tightly bounded, use original
-        if (!foundPixel || (minX <= 5 && minY <= 5 && maxX >= canvas.width - 6 && maxY >= canvas.height - 6)) {
-          trimmedCache.set(src, src);
-          if (isMounted.current) setDisplaySrc(src);
+        // If image has an opaque background or already touches edges, keep normal
+        if (!found || (minX <= 3 && minY <= 3 && maxX >= size - 4 && maxY >= size - 4)) {
+          const defaultFit = { scale: 1, origin: '50% 50%', shiftX: 0, shiftY: 0 };
+          fitCache.set(src, defaultFit);
+          if (isMounted.current) setFit(defaultFit);
           return;
         }
 
-        // Add 2% padding
-        const pad = Math.round(Math.max(canvas.width, canvas.height) * 0.02);
-        const cropX = Math.max(0, minX - pad);
-        const cropY = Math.max(0, minY - pad);
-        const cropW = Math.min(canvas.width - cropX, (maxX - minX) + pad * 2);
-        const cropH = Math.min(canvas.height - cropY, (maxY - minY) + pad * 2);
+        const contentW = (maxX - minX) / size;
+        const contentH = (maxY - minY) / size;
+        const maxDim = Math.max(contentW, contentH);
 
-        const trimmedCanvas = document.createElement('canvas');
-        trimmedCanvas.width = cropW;
-        trimmedCanvas.height = cropH;
-        const trimmedCtx = trimmedCanvas.getContext('2d');
-        trimmedCtx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        // Full maximum bigness (fills 95% of the card, up to 1.75x zoom)
+        const calculatedScale = Math.min(1.75, Math.max(1, 0.95 / maxDim));
 
-        const trimmedUrl = trimmedCanvas.toDataURL('image/webp', 0.95);
-        trimmedCache.set(src, trimmedUrl);
-        if (isMounted.current) setDisplaySrc(trimmedUrl);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        // Check where the edges land at full zoom
+        const topEdge = centerY - calculatedScale * (centerY - minY);
+        const bottomEdge = centerY + calculatedScale * (maxY - centerY);
+        const leftEdge = centerX - calculatedScale * (centerX - minX);
+        const rightEdge = centerX + calculatedScale * (maxX - centerX);
+
+        // Nudge only if an edge would clip outside the card (prevents Piplup's head from cutting off)
+        let shiftY = 0;
+        if (topEdge < 2) {
+          shiftY = Math.round(2 - topEdge);
+        } else if (bottomEdge > 98) {
+          shiftY = Math.round(98 - bottomEdge);
+        }
+
+        let shiftX = 0;
+        if (leftEdge < 2) {
+          shiftX = Math.round(2 - leftEdge);
+        } else if (rightEdge > 98) {
+          shiftX = Math.round(98 - rightEdge);
+        }
+
+        const result = {
+          scale: calculatedScale,
+          origin: `${Math.round(centerX)}% ${Math.round(centerY)}%`,
+          shiftX,
+          shiftY
+        };
+
+        fitCache.set(src, result);
+        if (isMounted.current) setFit(result);
       } catch {
-        // If CORS or error, gracefully fallback to original
-        trimmedCache.set(src, src);
-        if (isMounted.current) setDisplaySrc(src);
+        const fallback = { scale: 1, origin: '50% 50%', shiftX: 0, shiftY: 0 };
+        fitCache.set(src, fallback);
+        if (isMounted.current) setFit(fallback);
       }
     };
+
     img.onerror = () => {
-      trimmedCache.set(src, src);
-      if (isMounted.current) setDisplaySrc(src);
+      const fallback = { scale: 1, origin: '50% 50%', shiftX: 0, shiftY: 0 };
+      fitCache.set(src, fallback);
+      if (isMounted.current) setFit(fallback);
     };
+
     img.src = src;
 
     return () => {
@@ -87,15 +111,32 @@ export default function AutoFitImage({ src, alt, style = {}, onMouseEnter, onMou
     };
   }, [src]);
 
+  // Hover boost: scales an extra 1.08x and cleanly cuts off at the frame on hover
+  const activeScale = hovered ? fit.scale * 1.08 : fit.scale;
+
   return (
     <img
-      src={displaySrc}
+      src={src}
       alt={alt}
       loading="lazy"
       decoding="async"
-      style={style}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      style={{
+        ...style,
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        transformOrigin: fit.origin,
+        transform: `translate(${fit.shiftX}%, ${fit.shiftY}%) scale(${activeScale})`,
+        transition: 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)'
+      }}
+      onMouseEnter={(e) => {
+        setHovered(true);
+        if (onMouseEnter) onMouseEnter(e);
+      }}
+      onMouseLeave={(e) => {
+        setHovered(false);
+        if (onMouseLeave) onMouseLeave(e);
+      }}
     />
   );
 }

@@ -522,29 +522,22 @@ export default function Fanart() {
                     </div>
                   )}
 
-                  <div style={{ 
-                    height: '220px', 
-                    background: '#ffffff', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    padding: 0, 
-                    overflow: 'hidden', 
-                    position: 'relative' 
-                  }}>
-                    <AutoFitImage
-                      src={item.image_url}
-                      alt={item.title}
-                      style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        objectFit: 'contain', 
-                        transition: 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)' 
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                    />
-                  </div>
+                 {/* Image Container: Clean pure white, 0 padding, clips on hover */}
+                      <div style={{ 
+                        height: '240px', 
+                        background: '#ffffff', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        padding: 0, 
+                        overflow: 'hidden', 
+                        position: 'relative' 
+                      }}>
+                        <AutoFitImage 
+                          src={item.image_url} 
+                          alt={item.pokemon_name} 
+                        />
+                      </div>
 
                   <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, justifyContent: 'space-between' }}>
                     <div>

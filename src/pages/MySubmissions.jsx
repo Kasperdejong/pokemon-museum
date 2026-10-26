@@ -528,30 +528,23 @@ export default function MySubmissions() {
                     flexDirection: 'column'
                   }}
                 >
-                  <div style={{ 
-                    height: '240px', 
-                    background: '#ffffff', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    padding: 0, 
-                    overflow: 'hidden',
-                    position: 'relative'
-                  }}>
-                    <AutoFitImage
-                      src={item.image_url}
-                      alt=""
-                      style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        objectFit: 'contain',
-                        transition: 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                    />
-                  </div>
-
+             {/* Image Container: Clean pure white, 0 padding, clips on hover */}
+                      <div style={{ 
+                        height: '240px', 
+                        background: '#ffffff', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        padding: 0, 
+                        overflow: 'hidden', 
+                        position: 'relative' 
+                      }}>
+                        <AutoFitImage 
+                          src={item.image_url} 
+                          alt={item.pokemon_name} 
+                        />
+                      </div>
+                      
                   <div style={{ padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     <div>
                       <h3 style={{ margin: '0 0 4px 0', fontSize: '18px', color: '#000', fontWeight: 'bold' }}>

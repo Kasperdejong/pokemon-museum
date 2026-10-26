@@ -474,27 +474,20 @@ export default function Gallery({ instructorMode = false }) {
                       )}
 
                   {/* Image Container: Clean pure white, 0 padding, clips on hover */}
+                     {/* Image Container: Clean pure white, 0 padding, clips on hover */}
                       <div style={{ 
                         height: '240px', 
                         background: '#ffffff', 
                         display: 'flex', 
                         alignItems: 'center', 
                         justifyContent: 'center', 
-                        padding: 0, /* Eliminates the grey/white line completely */
-                        overflow: 'hidden', /* Cuts off cleanly during hover */
-                        position: 'relative'
+                        padding: 0, 
+                        overflow: 'hidden', 
+                        position: 'relative' 
                       }}>
                         <AutoFitImage 
                           src={item.image_url} 
                           alt={item.pokemon_name} 
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'contain', 
-                            transition: 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)'
-                          }} 
-                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                         />
                       </div>
 
